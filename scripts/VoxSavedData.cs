@@ -15,8 +15,6 @@ public class VoxSavedData : ScriptableObject
     /// </summary>
     public void AddVoxObject(int voxId, VoxObject voxObj)
     {
-        
-
         voxIds.Add(voxId);
         voxObjects.Add(voxObj.ToVoxObjectSaveable());
         EditorUtility.SetDirty(this);

@@ -90,9 +90,17 @@ namespace zombVoxels
         public int colId;
     }
 
-    [System.Serializable]
-    public class VoxTransform
+    public unsafe struct VoxTransform
     {
-        public List<int> colIds = new();
+        public Matrix4x4 prevLToW;
+        public void* colIds_ptr;
+        public int colIds_lenght;
+
+        [System.Serializable]
+        public class VoxTransformSavable
+        {
+            public List<int> colIds;
+            public int transIndex;
+        }
     }
 }

@@ -1,10 +1,13 @@
 using System.Collections.Generic;
 using TMPro;
+using Unity.Burst;
 using Unity.Collections;
+using Unity.Collections.LowLevel.Unsafe;
 using Unity.VisualScripting;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.InputSystem.iOS;
+using UnityEngine.Jobs;
 
 namespace zombVoxels
 {
@@ -28,10 +31,31 @@ namespace zombVoxels
         }
 
         /// <summary>
-        /// Creates a voxObject from the given collider and adds or overwrites the given objId by the newly created voxObject
+        /// Creates a voxObject from the given collider unless colId already exist
         /// </summary>
         public void CreateVoxObjectFromCollider(Collider col, int colId, byte objVoxType = 0)
         {
+            //Add colId to transform
+            Transform trans = col.transform;
+            if (transToColIds.TryGetValue(trans, out var voxT) == false)
+            {
+#if UNITY_EDITOR
+                if (Application.isPlaying == true)
+#endif    
+                    newVoxelTrans.Add(trans);
+
+                voxT = new()
+                {
+                    colIds = new(),
+                    transIndex = -1//We set it later when we actually create the trans
+                };
+
+                transToColIds.Add(trans, voxT);
+            }
+
+            voxT.colIds.Add(colId);
+
+            //Voxelize the collider if needed
             if (colIdToVoxObject.ContainsKey(colId) == true) return;
 
             VoxObject voxObj = VoxHelpFunc.VoxelizeCollider(col, objVoxType);
@@ -42,6 +66,9 @@ namespace zombVoxels
 #endif
         }
 
+        /// <summary>
+        /// Removes a voxObject with the given colId
+        /// </summary>
         public void DestroyVoxObject(int colId)
         {
             if (colIdToVoxObject.Remove(colId) == false) return;
@@ -60,8 +87,10 @@ namespace zombVoxels
 
         #region VoxelWorldManagement
 
+        
         [SerializeField] private Vector3 worldScaleAxis = Vector3.one;
-        [SerializeField] private SerializableDictionary<Transform, int> transToTransIndex = new(); 
+        [SerializeField] private SerializableDictionary<Transform, VoxTransform.VoxTransformSavable> transToColIds = new();
+        private HashSet<Transform> newVoxelTrans = new();
         [System.NonSerialized] public VoxWorld voxWorld = new();
 
         private bool ValidateVoxelSystem()
@@ -113,7 +142,7 @@ namespace zombVoxels
                 return false;
             }
 
-            //Add vox objects
+            //Try load vox objects from saved data
             int savedCount = savedVoxData.voxIds.Count;
             for (int i = 0; i < savedCount; i++)
             {
@@ -136,6 +165,32 @@ namespace zombVoxels
             //Dispose world voxel arrays
             if (voxWorld.voxs.IsCreated == true) voxWorld.voxs.Dispose();
             if (voxWorld.voxsTypes.IsCreated == true) voxWorld.voxsTypes.Dispose();
+        }
+
+        /// <summary>
+        /// The colIds the transform at X uses
+        /// </summary>
+        private List<NativeArray<int>> transColIds;
+
+        [BurstCompile]
+        private struct GetTransformData_work : IJobParallelForTransform
+        {
+            [NativeDisableParallelForRestriction] public NativeList<VoxTransform> voxTranss;
+            [NativeDisableParallelForRestriction] public NativeList<float> transOldLocValue;
+
+            public void Execute(int index, TransformAccess transform)
+            {
+                //Get transform location value
+                float newLocValue = transform.worldToLocalMatrix.GetHashCode();
+
+                if (newLocValue - transOldLocValue[index] != 0.0f)
+                {
+                    //Transform has moved, update its voxels
+                    Matrix4x4 newLToW = transform.localToWorldMatrix;
+
+                    transOldLocValue[index] = newLocValue;
+                }
+            }
         }
 
         #endregion VoxelWorldManagement

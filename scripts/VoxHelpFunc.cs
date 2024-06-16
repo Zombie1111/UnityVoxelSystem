@@ -403,6 +403,9 @@ namespace zombVoxels
             return hashSet;
         }
 
+        /// <summary>
+        /// Returns a int that is unique for all colliders that are different (Mesh colliders useses bounds and vertexCount to get id)
+        /// </summary>
         public static int GetColId(this Collider col, int objType)
         {
             int colId = 17;
