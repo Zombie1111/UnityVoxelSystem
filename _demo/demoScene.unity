@@ -221,7 +221,7 @@ Transform:
   m_GameObject: {fileID: 542478106}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 1.21, y: 0, z: 3.77}
+  m_LocalPosition: {x: 55.6, y: 17.77, z: 41.49}
   m_LocalScale: {x: 23.6711, y: 2.0788, z: 17.079243}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -425,7 +425,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 1472218366}
-  - component: {fileID: 1472218365}
+  - component: {fileID: 1472218367}
   m_Layer: 0
   m_Name: _WorldHandler_
   m_TagString: Untagged
@@ -433,21 +433,6 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!114 &1472218365
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1472218364}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 8a534b36110bc214ebc3532efbbe2007, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  worldScaleAxis: {x: 1, y: 0.5, z: 1}
-  transToTransIndex:
-    dictionaryList: []
 --- !u!4 &1472218366
 Transform:
   m_ObjectHideFlags: 0
@@ -463,6 +448,33 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1472218367
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1472218364}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8a534b36110bc214ebc3532efbbe2007, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  worldScaleAxis: {x: 1, y: 0.5, z: 1}
+  transToColIds:
+    dictionaryList:
+    - Key: {fileID: 542478110}
+      Value:
+        colIds: 545504ed
+        transIndex: -1
+      index: 0
+      isKeyDuplicated: 0
+    - Key: {fileID: 2401749211043727931}
+      Value:
+        colIds: 3cc9cc94
+        transIndex: -1
+      index: 1
+      isKeyDuplicated: 0
 --- !u!4 &2401749211043727931
 Transform:
   m_ObjectHideFlags: 0
@@ -472,7 +484,7 @@ Transform:
   m_GameObject: {fileID: 7001209564311393158}
   serializedVersion: 2
   m_LocalRotation: {x: -0.7068768, y: -0.018036341, z: -0.01803634, w: 0.7068767}
-  m_LocalPosition: {x: 3.21, y: 5.97, z: -9.52}
+  m_LocalPosition: {x: 57.6, y: 23.74, z: 28.2}
   m_LocalScale: {x: 300, y: 300, z: 300}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -586,7 +598,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   buildOnStart: 0
-  voxelType: 0
+  voxelType: 1
   voxelColliderOverwrite: {fileID: 0}
   includeInative: 0
   includeTriggers: 0
@@ -594,7 +606,10 @@ MonoBehaviour:
   ignoreChildren: 0
   affectSelf: 1
   affectChildren: 1
-  voxCols: []
+  voxCols:
+  - col: {fileID: 8234654202685583752}
+    colId: -1798518468
+    colType: 1
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

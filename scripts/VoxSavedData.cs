@@ -2,35 +2,43 @@ using System.Collections.Generic;
 using Unity.Collections;
 using UnityEditor;
 using UnityEngine;
-using zombVoxels;
-
-public class VoxSavedData : ScriptableObject
+namespace zombVoxels
 {
-    public List<int> voxIds = new();
-    public List<VoxObject.VoxObjectSaveable> voxObjects = new();
+    public class VoxSavedData : ScriptableObject
+    {
+        public SerializableDictionary<int, VoxObject.VoxObjectSaveable> colIdToVoxObjectSave = new();
+
+        /// <summary>
+        /// Adds the given vox object to the global voxelObject dictorary
+        /// </summary>
+        internal void AddVoxObject(int colId, VoxObject.VoxObjectSaveable voxObj)
+        {
+            if (colIdToVoxObjectSave.TryAdd(colId, voxObj) == false) return;
 
 #if UNITY_EDITOR
-    /// <summary>
-    /// Add vox object that should be saved on disk (Editor only)
-    /// </summary>
-    public void AddVoxObject(int voxId, VoxObject voxObj)
-    {
-        voxIds.Add(voxId);
-        voxObjects.Add(voxObj.ToVoxObjectSaveable());
-        EditorUtility.SetDirty(this);
-    }
-
-    /// <summary>
-    /// Remove vox object that is saved on disk (Editor only)
-    /// </summary>
-    public void RemoveVoxObject(int voxId)
-    {
-        int voxIndex = voxIds.FindIndex(id => id == voxId);
-        if (voxIndex < 0) return;
-
-        voxIds.RemoveAtSwapBack(voxIndex);
-        voxObjects.RemoveAtSwapBack(voxIndex);
-        EditorUtility.SetDirty(this);
-    }
+            if (Application.isPlaying == false) EditorUtility.SetDirty(this);
 #endif
+        }
+
+        /// <summary>
+        /// Removes the given vox object from the global voxelObject dictorary
+        /// </summary>
+        internal void RemoveVoxObject(int colId)
+        {
+            if (colIdToVoxObjectSave.Remove(colId) == false) return;
+
+#if UNITY_EDITOR
+            if (Application.isPlaying == false) EditorUtility.SetDirty(this);
+#endif
+        }
+
+        internal void ClearVoxelObjects()
+        {
+            colIdToVoxObjectSave.Clear();
+
+#if UNITY_EDITOR
+            if (Application.isPlaying == false) EditorUtility.SetDirty(this);
+#endif
+        }
+    }
 }

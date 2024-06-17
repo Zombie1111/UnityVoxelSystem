@@ -4,12 +4,14 @@ using System.Collections.Generic;
 using Unity.Collections;
 using Unity.Collections.NotBurstCompatible;
 using System.Linq;
+using System.Runtime.InteropServices;
 
 namespace zombVoxels
 {
-    public struct VoxObject
+    public unsafe struct VoxObject
     {
-        public NativeHashSet<int> voxs;
+        public void* voxs_ptr;
+        public int voxs_lenght;
         public Vector3 xDirL;
         public Vector3 yDirL;
         public Vector3 zDirL;
@@ -17,25 +19,12 @@ namespace zombVoxels
         public int vCountYZ;
         public int vCountZ;
         public byte voxType;
-
-        public VoxObjectSaveable ToVoxObjectSaveable()
-        {
-            return new()
-            {
-                minL = minL,
-                vCountYZ = vCountYZ,
-                vCountZ = vCountZ,
-                xDirL = xDirL,
-                yDirL = yDirL,
-                zDirL = zDirL,
-                voxs = voxs.ToArray(),
-                voxType = voxType
-            };
-        }
+        [MarshalAs(UnmanagedType.U1)] public bool isAppliedToWorld;
 
         [System.Serializable]
         public class VoxObjectSaveable
         {
+            public int objIndex;
             public int[] voxs;
             public Vector3 xDirL;
             public Vector3 yDirL;
@@ -44,39 +33,14 @@ namespace zombVoxels
             public int vCountYZ;
             public int vCountZ;
             public byte voxType;
-
-            public VoxObject ToVoxObject()
-            {
-                return new()
-                {
-                    minL = minL,
-                    vCountYZ = vCountYZ,
-                    vCountZ = vCountZ,
-                    xDirL = xDirL,
-                    yDirL = yDirL,
-                    zDirL = zDirL,
-                    voxs = voxs.ToNativeHashSet(Allocator.Persistent),
-                    voxType = voxType
-                };
-            }
         }
     }
 
     public unsafe struct VoxWorld
     {
-        /// <summary>
-        /// The status of each voxel (== 0 = air, == 1 = filled with defualt, > 1 = filled and value is typeIndex)
-        /// </summary>
-        public NativeArray<byte> voxs;
-
-        /// <summary>
-        /// The number of objectVoxels at each worldVoxel of type X (Use "typeIndex * voxWorld.vCount + voxelIndex" to get index)
-        /// </summary>
-        public NativeArray<byte> voxsTypes;
-
         public int vCountXYZ;
 #if UNITY_EDITOR
-        public int vCountY;
+        public int vCountY;//Its only used in editor to visualize the voxel grid
         public int vCountX;
 #endif
         public int vCountZ;
@@ -88,11 +52,11 @@ namespace zombVoxels
     {
         public Collider col;
         public int colId;
+        public byte colType;
     }
 
     public unsafe struct VoxTransform
     {
-        public Matrix4x4 prevLToW;
         public void* colIds_ptr;
         public int colIds_lenght;
 
@@ -100,6 +64,13 @@ namespace zombVoxels
         public class VoxTransformSavable
         {
             public List<int> colIds;
+            public int transIndex;
+        }
+
+        public struct ToCompute
+        {
+            public Matrix4x4 prevLToW;
+            public Matrix4x4 nowLToW;
             public int transIndex;
         }
     }

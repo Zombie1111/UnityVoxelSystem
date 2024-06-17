@@ -5,6 +5,9 @@ using Unity.Mathematics;
 using Unity.VisualScripting;
 using UnityEngine.Jobs;
 using Unity.Collections;
+using System.Linq;
+using Unity.Collections.LowLevel.Unsafe;
+using System.Threading;
 
 namespace zombVoxels
 {
@@ -214,23 +217,98 @@ namespace zombVoxels
         }
 
         [BurstCompile]
-        public static void ApplyVoxObjectToWorldVox(ref VoxWorld voxWorld, ref VoxObject voxObject, ref Matrix4x4 objLToWPrev, ref Matrix4x4 objLToWNow)
+        public unsafe static void ApplyVoxObjectToWorldVox(
+            ref VoxWorld voxWorld, ref NativeArray<byte> voxsCount, ref NativeArray<byte> voxsType, ref NativeArray<byte> voxsTypeOld,
+            ref VoxObject voxObject, ref Matrix4x4 objLToWPrev, ref Matrix4x4 objLToWNow)
         {
+            //Get voxs nativeArray from pointer
+            NativeArray<int> voxs = NativeArrayUnsafeUtility.ConvertExistingDataToNativeArray<int>(
+                                       voxObject.voxs_ptr, voxObject.voxs_lenght, Allocator.None);
+
+#if ENABLE_UNITY_COLLECTIONS_CHECKS
+            NativeArrayUnsafeUtility.SetAtomicSafetyHandle(ref voxs, AtomicSafetyHandle.GetTempMemoryHandle());
+#endif
+
+            //Define veriabels used in compute
             int vCountYZ = voxObject.vCountYZ;
             int vCountZ = voxObject.vCountZ;
-            Vector3 minW = objLToWNow.MultiplyPoint3x4(voxObject.minL);
-            Vector3 xDirW = objLToWNow.MultiplyVector(voxObject.xDirL) * VoxGlobalSettings.voxelSizeWorld;
-            Vector3 yDirW = objLToWNow.MultiplyVector(voxObject.yDirL) * VoxGlobalSettings.voxelSizeWorld;
-            Vector3 zDirW = objLToWNow.MultiplyVector(voxObject.zDirL) * VoxGlobalSettings.voxelSizeWorld;
+            int vwCountZ = voxWorld.vCountZ;
+            int vwCountZY = voxWorld.vCountZY;
 
-            foreach (int vox in voxObject.voxs)
+            Vector3 minW;
+            Vector3 xDirW;
+            Vector3 yDirW;
+            Vector3 zDirW;
+
+            byte thisType = voxObject.voxType;
+            byte vType;
+            byte vTypeO;
+            Vector3 voxPos;
+            int wvIndex;
+            int remainderAfterZ;
+
+            //Waint until no other thread is accessing voxObject
+            //Write+Read to voxObject
+            //Unlock voxObject to allow other thread to Write+Read if needed
+
+            //Remove voxels from worldVoxels
+            if (voxObject.isAppliedToWorld == true)
             {
-                int remainderAfterZ = vox % vCountYZ;
-                Vector3 voxPos = minW + (xDirW * (vox / vCountYZ)) + (yDirW * (remainderAfterZ / vCountZ)) + (zDirW * (remainderAfterZ % vCountZ));
+                //Convert local voxel grid to prev worldSpace
+                minW = objLToWPrev.MultiplyPoint3x4(voxObject.minL);
+                xDirW = objLToWPrev.MultiplyVector(voxObject.xDirL) * VoxGlobalSettings.voxelSizeWorld;
+                yDirW = objLToWPrev.MultiplyVector(voxObject.yDirL) * VoxGlobalSettings.voxelSizeWorld;
+                zDirW = objLToWPrev.MultiplyVector(voxObject.zDirL) * VoxGlobalSettings.voxelSizeWorld;
+                
+                foreach (int vox in voxs)
+                {
+                    remainderAfterZ = vox % vCountYZ;
+                    voxPos = minW + (xDirW * (vox / vCountYZ)) + (yDirW * (remainderAfterZ / vCountZ)) + (zDirW * (remainderAfterZ % vCountZ));
 
-                int wvIndex = (int)(voxPos.z / VoxGlobalSettings.voxelSizeWorld)
-                    + ((int)(voxPos.y / VoxGlobalSettings.voxelSizeWorld) * voxWorld.vCountZ)
-                    + ((int)(voxPos.x / VoxGlobalSettings.voxelSizeWorld) * voxWorld.vCountZY);
+                    wvIndex = (int)(voxPos.z / VoxGlobalSettings.voxelSizeWorld)
+                        + ((int)(voxPos.y / VoxGlobalSettings.voxelSizeWorld) * vwCountZ)
+                        + ((int)(voxPos.x / VoxGlobalSettings.voxelSizeWorld) * vwCountZY);
+
+                    voxsCount[wvIndex]--;
+
+                    vType = voxsType[wvIndex];
+                    vTypeO = voxsTypeOld[wvIndex];
+                    if (thisType == vTypeO)
+                    {
+                        vTypeO = 0;
+                        voxsTypeOld[wvIndex] = 0;
+                    }
+
+                    if (thisType == vType)
+                    {
+                        vType = vTypeO;
+                        voxsType[wvIndex] = vTypeO;
+                    }
+                }
+            }
+            else voxObject.isAppliedToWorld = true;
+
+            //Convert local voxel grid to now worldSpace
+            minW = objLToWNow.MultiplyPoint3x4(voxObject.minL);
+            xDirW = objLToWNow.MultiplyVector(voxObject.xDirL) * VoxGlobalSettings.voxelSizeWorld;
+            yDirW = objLToWNow.MultiplyVector(voxObject.yDirL) * VoxGlobalSettings.voxelSizeWorld;
+            zDirW = objLToWNow.MultiplyVector(voxObject.zDirL) * VoxGlobalSettings.voxelSizeWorld;
+
+            //Add voxels to worldVoxels
+            foreach (int vox in voxs)
+            {
+                remainderAfterZ = vox % vCountYZ;
+                voxPos = minW + (xDirW * (vox / vCountYZ)) + (yDirW * (remainderAfterZ / vCountZ)) + (zDirW * (remainderAfterZ % vCountZ));
+
+                wvIndex = (int)(voxPos.z / VoxGlobalSettings.voxelSizeWorld)
+                    + ((int)(voxPos.y / VoxGlobalSettings.voxelSizeWorld) * vwCountZ)
+                    + ((int)(voxPos.x / VoxGlobalSettings.voxelSizeWorld) * vwCountZY);
+
+                voxsCount[wvIndex]++;
+                if (voxsType[wvIndex] < thisType) voxsType[wvIndex] = thisType;
+
+                vType = voxsTypeOld[wvIndex];
+                if (vType == 0 || vType > thisType) voxsTypeOld[wvIndex] = thisType;
             }
         }
     }
@@ -296,7 +374,7 @@ namespace zombVoxels
         /// <summary>
         /// Voxelizes the given collider, returns voxel positions in collider transform localSpace. The voxels has the size defined in voxGlobalSettings.cs
         /// </summary>
-        public static VoxObject VoxelizeCollider(Collider col, byte colVoxType = 0)
+        public static VoxObject.VoxObjectSaveable VoxelizeCollider(Collider col, byte colVoxType = 0)
         {
             Vector3 voxelSize = VoxGlobalSettings.voxelSizeWorld * Vector3.one;
             Bounds colBounds = col.bounds;
@@ -350,14 +428,15 @@ namespace zombVoxels
             return new()
             {
                 //voxs = voxs.ToNativeHashSet(Allocator.Persistent),
-                voxs = voxs.ToNativeHashSet(Allocator.Persistent),
+                voxs = voxs.ToArray(),
                 vCountYZ = vCountY * vCountZ,
                 vCountZ = vCountZ,
                 xDirL = colWToL.MultiplyVector(Vector3.right),
                 yDirL = colWToL.MultiplyVector(Vector3.up),
                 zDirL = colWToL.MultiplyVector(Vector3.forward),
                 minL = colWToL.MultiplyPoint3x4(bStart),
-                voxType = colVoxType
+                voxType = colVoxType,
+                objIndex = -1//We assign this later when we actually add the real voxelObject
             };
         }
 
@@ -390,6 +469,34 @@ namespace zombVoxels
         }
 
         /// <summary>
+        /// Converts a int[] to a NativeArray<int>.
+        /// </summary>
+        public static NativeArray<int> ToNativeArray(this int[] array, Allocator allocator)
+        {
+            NativeArray<int> nativeArray = new(array.Length, allocator);
+            for (int i = 0; i < array.Length; i++)
+            {
+                nativeArray[i] = array[i];
+            }
+
+            return nativeArray;
+        }
+
+        /// <summary>
+        /// Converts a List<int> to a NativeArray<int>.
+        /// </summary>
+        public static NativeArray<int> ToNativeArray(this List<int> array, Allocator allocator)
+        {
+            NativeArray<int> nativeArray = new(array.Count, allocator);
+            for (int i = 0; i < array.Count; i++)
+            {
+                nativeArray[i] = array[i];
+            }
+
+            return nativeArray;
+        }
+
+        /// <summary>
         /// Converts a NativeHashSet<int> to a HashSet<int>.
         /// </summary>
         public static HashSet<int> ToHashSet(this NativeHashSet<int> nativeHashSet)
@@ -406,7 +513,7 @@ namespace zombVoxels
         /// <summary>
         /// Returns a int that is unique for all colliders that are different (Mesh colliders useses bounds and vertexCount to get id)
         /// </summary>
-        public static int GetColId(this Collider col, int objType)
+        public static int GetColId(this Collider col, byte objType)
         {
             int colId = 17;
             Vector3 bExtents = col.bounds.extents;
@@ -464,6 +571,21 @@ namespace zombVoxels
             }
 
             return colId;
+        }
+
+        /// <summary>
+        /// Returns the VoxSavedData asset, returns null if it has been deleted
+        /// </summary>
+        public static VoxSavedData TryGetVoxelSaveAsset()
+        {
+            VoxSavedData savedVoxData = Resources.Load<VoxSavedData>("VoxSavedData");
+            if (savedVoxData == null)
+            {
+                Debug.LogError("Expected VoxSavedData.asset to exist at path _voxelSystem/Resources/VoxSavedData.asset, have you deleted it?");
+                return null;
+            }
+
+            return savedVoxData;
         }
     }
 }
