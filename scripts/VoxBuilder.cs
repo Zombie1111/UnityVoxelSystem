@@ -9,6 +9,8 @@ namespace zombVoxels
 {
     public static class VoxBuilder
     {
+        Test later, use collider.raycast and send raycast towards collider center, if no collision we are inside collider
+
         /// <summary>
         /// Builds all voxelObjects and voxelSystem for all colliders in the given scene, returns true if succesfull
         /// </summary>
