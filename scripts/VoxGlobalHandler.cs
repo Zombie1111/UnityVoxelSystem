@@ -1,14 +1,13 @@
+using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using TMPro;
 using Unity.Burst;
 using Unity.Collections;
 using Unity.Collections.LowLevel.Unsafe;
 using Unity.Jobs;
-using Unity.VisualScripting;
 using UnityEditor;
 using UnityEngine;
-using UnityEngine.Accessibility;
-using UnityEngine.InputSystem.iOS;
 using UnityEngine.Jobs;
 
 namespace zombVoxels
@@ -34,19 +33,14 @@ namespace zombVoxels
 
         /// <summary>
         /// Creates a voxObject from the given collider and adds it to the collider transform
-        /// (Unexpected behaviour may occure if collider transform already has colId)
         /// </summary>
-        public void CreateVoxObjectFromCollider(Collider col, int colId, byte objVoxType = 0)
+        public void CreateVoxObjectFromCollider(Collider col, int colId, byte objVoxType = 1)
         {
             //Add colId to transform
             Transform trans = col.transform;
+            bool isNewT;
             if (transToColIds.TryGetValue(trans, out var voxT) == false)
             {
-#if UNITY_EDITOR
-                if (Application.isPlaying == true)
-#endif    
-                    newVoxelTrans.Add(trans);
-
                 voxT = new()
                 {
                     colIds = new(),
@@ -54,9 +48,20 @@ namespace zombVoxels
                 };
 
                 transToColIds.Add(trans, voxT);
+                isNewT = true;
+            }
+            else
+            {
+                isNewT = false;
             }
 
-            voxT.colIds.Add(colId);
+            if (voxT.colIds.Contains(colId) == false) voxT.colIds.Add(colId);
+            else if (isNewT == false) return;
+
+#if UNITY_EDITOR
+            if (Application.isPlaying == true)
+#endif
+                newVoxelTrans.Add(trans);
 
             //Voxelize the collider if needed
             if (savedVoxData.colIdToVoxObjectSave.ContainsKey(colId) == true) return;
@@ -82,9 +87,11 @@ namespace zombVoxels
             }
 
             savedVoxData.RemoveVoxObject(colId);
-
         }
 
+        /// <summary>
+        /// Cleares voxelTransforms and RuntimeVoxelSystem (Works in build)
+        /// </summary>
         public void ClearEditorVoxelSystem()
         {
             ClearRuntimeVoxelSystem();
@@ -110,7 +117,11 @@ namespace zombVoxels
         private HashSet<int> newVoxelObj = new();
         [System.NonSerialized] public VoxWorld voxWorld = new();
 
-        private bool ValidateVoxelSystem()
+        /// <summary>
+        /// Returns true if the voxelSystem is valid
+        /// </summary>
+        /// <returns></returns>
+        public bool ValidateVoxelSystem()
         {
             voxEditorIsValid = false;
 
@@ -137,9 +148,9 @@ namespace zombVoxels
             
             float totScale = worldScaleAxis.TotalValue() / 3.0f;
 
-            int vZCount = Mathf.RoundToInt((worldScaleAxis.z / totScale) * VoxGlobalSettings.voxelAxisCount);
-            int vXCount = Mathf.RoundToInt((worldScaleAxis.x / totScale) * VoxGlobalSettings.voxelAxisCount);
-            int vYCount = Mathf.RoundToInt((worldScaleAxis.y / totScale) * VoxGlobalSettings.voxelAxisCount);
+            int vZCount = (int)Math.Round((worldScaleAxis.z / totScale) * VoxGlobalSettings.voxelAxisCount);
+            int vXCount = (int)Math.Round((worldScaleAxis.x / totScale) * VoxGlobalSettings.voxelAxisCount);
+            int vYCount = (int)Math.Round((worldScaleAxis.y / totScale) * VoxGlobalSettings.voxelAxisCount);
 
             voxWorld.vCountXYZ = vXCount * vYCount * vZCount;
 #if UNITY_EDITOR
@@ -147,7 +158,7 @@ namespace zombVoxels
             voxWorld.vCountY = vYCount;
 #endif
             voxWorld.vCountZ = vZCount;
-            voxWorld.vCountZY = vZCount * vYCount;
+            voxWorld.vCountYZ = vYCount * vZCount;
 
             if (voxWorld.vCountXYZ < 100)
             {
@@ -197,12 +208,15 @@ namespace zombVoxels
             //Add existing voxel objects to the voxelSystem
             foreach (var colObj in savedVoxData.colIdToVoxObjectSave)
             {
-                savedVoxData.colIdToVoxObjectSave[colObj.Key].objIndex = AddObjectToVoxelSystem(colObj.Key, colObj.Value);
+                AddObjectToVoxelSystem(colObj.Key, colObj.Value);
             }
 
             voxRuntimeIsValid = true;
         }
 
+        /// <summary>
+        /// Disposes the jobs and the world voxel grid
+        /// </summary>
         public void ClearRuntimeVoxelSystem()
         {
             if (voxRuntimeIsValid == false) return;
@@ -251,34 +265,67 @@ namespace zombVoxels
         private unsafe int AddTransformToVoxelSystem(Transform trans, VoxTransform.VoxTransformSavable voxTrans)
         {
             if (trans == null) return -1;
-
+            
             NativeArray<int> colIds = voxTrans.colIds.ToNativeArray(Allocator.Persistent);
-            transColIds.Add(colIds);
-            voxelObjTranss.Add(trans);
-            gtd_job.transOldLocValue.Add(0.0f);
-            gtd_job.voxTranssLToWPrev.Add(Matrix4x4.zero);
-
-            cvo_job.voxTranss.Add(new()
+            if (voxTrans.transIndex >= 0)
             {
-                colIds_ptr = NativeArrayUnsafeUtility.GetUnsafeReadOnlyPtr(colIds),
-                colIds_lenght = colIds.Length,
-            });
+                //Update already added transform
+                //Unapply transform from voxel system
+                var voxT = cvo_job.voxTranss[voxTrans.transIndex];
+
+                if (transColIds[voxTrans.transIndex].IsCreated == true)
+                {
+                    foreach (int colId in transColIds[voxTrans.transIndex])
+                    {
+                        var voxO = cvo_job.colIdToVoxObject[colId];
+                        var lToWPrev = gtd_job.voxTranssLToWPrev[voxTrans.transIndex];
+                        var lToWNow = trans.localToWorldMatrix;
+
+                        VoxHelpBurst.ApplyVoxObjectToWorldVox(ref voxWorld, ref cvo_job.voxsCount, ref cvo_job.voxsType, ref cvo_job.voxsTypeOld,
+                            ref voxO, ref lToWPrev, ref lToWNow, ref voxT, true);//We must unapply it before doing changing any data, should be fast enough to not cause a problem?
+                    }
+
+                    transColIds[voxTrans.transIndex].Dispose();
+                }
+
+                //Update transform data
+                transColIds[voxTrans.transIndex] = colIds;
+                gtd_job.transOldLocValue[voxTrans.transIndex] = 0.0f;
+
+                voxT.colIds_ptr = NativeArrayUnsafeUtility.GetUnsafeReadOnlyPtr(colIds);
+                voxT.colIds_lenght = colIds.Length;
+                cvo_job.voxTranss[voxTrans.transIndex] = voxT;
+            }
+            else
+            {
+                //Add new tranform to voxel system
+                transColIds.Add(colIds);
+                voxelObjTranss.Add(trans);
+                gtd_job.transOldLocValue.Add(0.0f);
+                gtd_job.voxTranssLToWPrev.Add(Matrix4x4.zero);
+                cvo_job.voxTranss.Add(new()
+                {
+                    colIds_ptr = NativeArrayUnsafeUtility.GetUnsafeReadOnlyPtr(colIds),
+                    colIds_lenght = colIds.Length,
+                    isAppliedToWorld = false
+                });
+            }
 
             return transColIds.Count - 1;
         }
 
         /// <summary>
         /// Adds the given voxel object to the voxelSystem returns the objIndex it was added to
-        /// (Unexpected behaviour may occure if colId is already added to the voxelSystem)
         /// </summary>
         private unsafe int AddObjectToVoxelSystem(int colId, VoxObject.VoxObjectSaveable voxObj)
         {
+            if (cvo_job.colIdToVoxObject.ContainsKey(colId) == true) return -1;
+
             var voxs = voxObj.voxs.ToNativeArray(Allocator.Persistent);
             voxObjectVoxs.Add(voxs);
 
             cvo_job.colIdToVoxObject.Add(colId, new()
             {
-                isAppliedToWorld = false,
                 minL = voxObj.minL,
                 vCountYZ = voxObj.vCountYZ,
                 vCountZ = voxObj.vCountZ,
@@ -308,6 +355,11 @@ namespace zombVoxels
 
         #region ComputeVoxels
 
+        public delegate void Event_OnGlobalReadAccessStart();
+        public event Event_OnGlobalReadAccessStart OnGlobalReadAccessStart;
+        public delegate void Event_OnGlobalReadAccessStop();
+        public event Event_OnGlobalReadAccessStop OnGlobalReadAccessStop;
+
         private void Update()
         {
             ComputeVoxels_start();
@@ -322,6 +374,11 @@ namespace zombVoxels
         {
             if (gtdCvo_jobIsActive == true || voxRuntimeIsValid == false) return;
 
+            //Global read access stops here
+            //Internal read+write access starts here
+            globalHasReadAccess = false;
+            OnGlobalReadAccessStop?.Invoke();
+
             //Add new transforms and objects to voxel system
             foreach (var newTrans in newVoxelTrans)
             {
@@ -334,7 +391,8 @@ namespace zombVoxels
             foreach (var newObj in newVoxelObj)
             {
                 var voxO = savedVoxData.colIdToVoxObjectSave[newObj];
-                voxO.objIndex = AddObjectToVoxelSystem(newObj, voxO);
+                //voxO.objIndex = AddObjectToVoxelSystem(newObj, voxO);
+                AddObjectToVoxelSystem(newObj, voxO);
             }
 
             newVoxelObj.Clear();
@@ -345,14 +403,21 @@ namespace zombVoxels
             gtdCvo_jobIsActive = true;
         }
 
+        private bool globalHasReadAccess = true;
+
         private void ComputeVoxels_end()
         {
             if (gtdCvo_jobIsActive == false) return;
-
+            
             //Complete the job
             gtdCvo_jobIsActive = false;
             gtd_handle.Complete();
             cvo_handle.Complete();
+
+            //Internal read+write access stops here
+            //Global read access starts here   
+            globalHasReadAccess = true;
+            OnGlobalReadAccessStart?.Invoke();
         }
 
         private ComputeVoxelWorld_work cvo_job;
@@ -434,8 +499,10 @@ namespace zombVoxels
                     {
                         var voxO = colIdToVoxObject[colId];
                         VoxHelpBurst.ApplyVoxObjectToWorldVox(ref voxW, ref voxsCount, ref voxsType, ref voxsTypeOld,
-                            ref voxO, ref toCompute.prevLToW, ref toCompute.nowLToW);
+                            ref voxO, ref toCompute.prevLToW, ref toCompute.nowLToW, ref voxT, false);
                     }
+
+                    voxTranss[toCompute.transIndex] = voxT;
                 }
             }
         }
@@ -451,6 +518,7 @@ namespace zombVoxels
 
 #if UNITY_EDITOR
         private Vector3 oldWorldScaleAxis = Vector3.zero;
+        public Transform debugTrams;
 
         private void OnDrawGizmos()
         {
@@ -459,7 +527,24 @@ namespace zombVoxels
                 ValidateVoxelSystem();
                 oldWorldScaleAxis = worldScaleAxis;
             }
+
+            if (Application.isPlaying == true)
+            {
+                Vector3 pos = debugTrams.position;
+                int vI = 0;
+                VoxHelpBurst.PosToWVoxIndex(ref pos, ref vI, ref voxWorld);
+                VoxHelpBurst.WVoxIndexToPos(ref vI, ref pos, ref voxWorld);
+                Gizmos.DrawCube(pos, Vector3.one * VoxGlobalSettings.voxelSizeWorld);
+            }
         }
+
+        private class EditorVoxToDraw
+        {
+            public Vector3 pos;
+            public byte colorI;
+        }
+
+        private List<EditorVoxToDraw> voxsToDraw = new();
 
         private void OnDrawGizmosSelected()
         {
@@ -471,6 +556,18 @@ namespace zombVoxels
             Gizmos.DrawWireCube(size * 0.5f, size + (Vector3.one * 0.1f));
             Gizmos.color = Color.red;
             Gizmos.DrawCube(size * 0.5f, size);
+
+            //Draw debug voxels
+            if (voxsToDraw.Count > 0 && Application.isPlaying == true)
+            {
+                Vector3 voxSize = Vector3.one * VoxGlobalSettings.voxelSizeWorld;
+
+                foreach (var draw in voxsToDraw)
+                {
+                    Gizmos.color = VoxGlobalSettings.diffColors64[draw.colorI];
+                    Gizmos.DrawCube(draw.pos, voxSize);
+                }
+            }
         }
 
         //debug stopwatch
@@ -486,6 +583,33 @@ namespace zombVoxels
             {
                 stopwatch.Stop();
                 Debug.Log(note + " time: " + stopwatch.Elapsed.TotalMilliseconds + "ms");
+            }
+        }
+
+        public void Debug_updateVisualVoxels()
+        {
+            voxsToDraw.Clear();
+            if (Application.isPlaying == false)
+            {
+                Debug.LogError("Cannot draw voxels in editmode");
+                return;
+            }
+
+            int vCount = voxWorld.vCountXYZ;
+            Vector3 voxPos = Vector3.zero;
+            byte vType;
+
+            for (int vI = 0; vI < vCount; vI++)
+            {
+                vType = cvo_job.voxsType[vI];
+                if (vType == 0) continue;
+
+                VoxHelpBurst.WVoxIndexToPos(ref vI, ref voxPos, ref voxWorld);
+                voxsToDraw.Add(new()
+                {
+                    pos = voxPos,
+                    colorI = (byte)Math.Clamp(vType / 4, 0, 63),
+                });
             }
         }
 #endif
@@ -512,7 +636,15 @@ namespace zombVoxels
 
             DrawPropertiesExcluding(serializedObject, hiddenFields);
             if (Application.isPlaying == false) EditorGUILayout.PropertyField(serializedObject.FindProperty("worldScaleAxis"), true);
-            else EditorGUILayout.HelpBox("Properties cannot be edited at runtime", MessageType.Info);
+            else
+            {
+                if (GUILayout.Button("Update Visual Voxels") == true)
+                {
+                    yourScript.Debug_updateVisualVoxels();
+                }
+
+                EditorGUILayout.HelpBox("Properties cannot be edited at runtime", MessageType.Info);
+            }
 
             GUI.enabled = false;
             if (Application.isPlaying == true)

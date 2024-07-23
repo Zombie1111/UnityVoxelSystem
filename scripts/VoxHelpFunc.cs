@@ -8,218 +8,21 @@ using Unity.Collections;
 using System.Linq;
 using Unity.Collections.LowLevel.Unsafe;
 using System.Threading;
+using System;
 
 namespace zombVoxels
 {
     [BurstCompile]
     public static class VoxHelpBurst
     {
-        [BurstCompile]
-        public static bool DoBoxOverlapTriangel(ref Vector3 tPosA, ref Vector3 tPosB, ref Vector3 tPosC, ref Bounds aabb)
-        {
-            float p0, p1, p2, r;
-
-            Vector3 center = aabb.center, extents = aabb.max - center;
-
-            Vector3 v0 = tPosA - center,
-                v1 = tPosB - center,
-                v2 = tPosC - center;
-
-            Vector3 f0 = v1 - v0,
-                f1 = v2 - v1,
-                f2 = v0 - v2;
-
-            Vector3 a00 = new Vector3(0, -f0.z, f0.y),
-                a01 = new Vector3(0, -f1.z, f1.y),
-                a02 = new Vector3(0, -f2.z, f2.y),
-                a10 = new Vector3(f0.z, 0, -f0.x),
-                a11 = new Vector3(f1.z, 0, -f1.x),
-                a12 = new Vector3(f2.z, 0, -f2.x),
-                a20 = new Vector3(-f0.y, f0.x, 0),
-                a21 = new Vector3(-f1.y, f1.x, 0),
-                a22 = new Vector3(-f2.y, f2.x, 0);
-
-            // Test axis a00
-            p0 = Vector3.Dot(v0, a00);
-            p1 = Vector3.Dot(v1, a00);
-            p2 = Vector3.Dot(v2, a00);
-            r = extents.y * math.abs(f0.z) + extents.z * math.abs(f0.y);
-
-            if (math.max(-FloatMaxThree(p0, p1, p2), FloatMinThree(p0, p1, p2)) > r)
-            {
-                return false;
-            }
-
-            // Test axis a01
-            p0 = Vector3.Dot(v0, a01);
-            p1 = Vector3.Dot(v1, a01);
-            p2 = Vector3.Dot(v2, a01);
-            r = extents.y * math.abs(f1.z) + extents.z * math.abs(f1.y);
-
-            if (math.max(-FloatMaxThree(p0, p1, p2), FloatMinThree(p0, p1, p2)) > r)
-            {
-                return false;
-            }
-
-            // Test axis a02
-            p0 = Vector3.Dot(v0, a02);
-            p1 = Vector3.Dot(v1, a02);
-            p2 = Vector3.Dot(v2, a02);
-            r = extents.y * math.abs(f2.z) + extents.z * math.abs(f2.y);
-
-            if (math.max(-FloatMaxThree(p0, p1, p2), FloatMinThree(p0, p1, p2)) > r)
-            {
-                return false;
-            }
-
-            // Test axis a10
-            p0 = Vector3.Dot(v0, a10);
-            p1 = Vector3.Dot(v1, a10);
-            p2 = Vector3.Dot(v2, a10);
-            r = extents.x * math.abs(f0.z) + extents.z * math.abs(f0.x);
-            if (math.max(-FloatMaxThree(p0, p1, p2), FloatMinThree(p0, p1, p2)) > r)
-            {
-                return false;
-            }
-
-            // Test axis a11
-            p0 = Vector3.Dot(v0, a11);
-            p1 = Vector3.Dot(v1, a11);
-            p2 = Vector3.Dot(v2, a11);
-            r = extents.x * math.abs(f1.z) + extents.z * math.abs(f1.x);
-
-            if (math.max(-FloatMaxThree(p0, p1, p2), FloatMinThree(p0, p1, p2)) > r)
-            {
-                return false;
-            }
-
-            // Test axis a12
-            p0 = Vector3.Dot(v0, a12);
-            p1 = Vector3.Dot(v1, a12);
-            p2 = Vector3.Dot(v2, a12);
-            r = extents.x * math.abs(f2.z) + extents.z * math.abs(f2.x);
-
-            if (math.max(-FloatMaxThree(p0, p1, p2), FloatMinThree(p0, p1, p2)) > r)
-            {
-                return false;
-            }
-
-            // Test axis a20
-            p0 = Vector3.Dot(v0, a20);
-            p1 = Vector3.Dot(v1, a20);
-            p2 = Vector3.Dot(v2, a20);
-            r = extents.x * math.abs(f0.y) + extents.y * math.abs(f0.x);
-
-            if (math.max(-FloatMaxThree(p0, p1, p2), FloatMinThree(p0, p1, p2)) > r)
-            {
-                return false;
-            }
-
-            // Test axis a21
-            p0 = Vector3.Dot(v0, a21);
-            p1 = Vector3.Dot(v1, a21);
-            p2 = Vector3.Dot(v2, a21);
-            r = extents.x * math.abs(f1.y) + extents.y * math.abs(f1.x);
-
-            if (math.max(-FloatMaxThree(p0, p1, p2), FloatMinThree(p0, p1, p2)) > r)
-            {
-                return false;
-            }
-
-            // Test axis a22
-            p0 = Vector3.Dot(v0, a22);
-            p1 = Vector3.Dot(v1, a22);
-            p2 = Vector3.Dot(v2, a22);
-            r = extents.x * math.abs(f2.y) + extents.y * math.abs(f2.x);
-
-            if (math.max(-FloatMaxThree(p0, p1, p2), FloatMinThree(p0, p1, p2)) > r)
-            {
-                return false;
-            }
-
-            if (FloatMaxThree(v0.x, v1.x, v2.x) < -extents.x || FloatMinThree(v0.x, v1.x, v2.x) > extents.x)
-            {
-                return false;
-            }
-
-            if (FloatMaxThree(v0.y, v1.y, v2.y) < -extents.y || FloatMinThree(v0.y, v1.y, v2.y) > extents.y)
-            {
-                return false;
-            }
-
-            if (FloatMaxThree(v0.z, v1.z, v2.z) < -extents.z || FloatMinThree(v0.z, v1.z, v2.z) > extents.z)
-            {
-                return false;
-            }
-
-            var normal = Vector3.Cross(f1, f0).normalized;
-            var pl = new Plane(normal, Vector3.Dot(normal, tPosA));
-            return DoBoxOverlapPlane(ref pl, ref aabb);
-        }
-
-        [BurstCompile]
-        public static bool DoBoxOverlapPlane(ref Plane pl, ref Bounds aabb)
-        {
-            Vector3 center = aabb.center;
-            var extents = aabb.max - center;
-
-            var r = extents.x * math.abs(pl.normal.x) + extents.y * math.abs(pl.normal.y) + extents.z * math.abs(pl.normal.z);
-            var s = Vector3.Dot(pl.normal, center) - pl.distance;
-
-            return math.abs(s) <= r;
-        }
-
-        [BurstCompile]
-        public static float FloatMaxThree(float a, float b, float c)
-        {
-            float max = a;
-
-            if (b > max)
-            {
-                max = b;
-            }
-
-            if (c > max)
-            {
-                max = c;
-            }
-
-            return max;
-        }
-
-        [BurstCompile]
-        public static float FloatMinThree(float a, float b, float c)
-        {
-            float min = a;
-
-            if (b < min)
-            {
-                min = b;
-            }
-
-            if (c < min)
-            {
-                min = c;
-            }
-
-            return min;
-        }
-
-        [BurstCompile]
-        public static void GetVoxelObjectPos(ref VoxWorld voxWorld,
-            ref NativeHashSet<int> voxs, int vCountYZ, int vCountZ, ref Vector3 minW, ref Vector3 xDirW, ref Vector3 yDirW, ref Vector3 zDirW)
-        {
-            foreach (int vox in voxs)
-            {
-                int remainderAfterZ = vox % vCountYZ;
-                Vector3 voxPos = minW + (xDirW * (vox / vCountYZ)) + (yDirW * (remainderAfterZ / vCountZ)) + (zDirW * (remainderAfterZ % vCountZ));
-            }
-        }
-
+        /// <summary>
+        /// Applies the given voxObject to the world voxelGrid,
+        /// only voxsCount, voxsType, voxsTypeOld and voxTrans is written to inside the function
+        /// </summary>
         [BurstCompile]
         public unsafe static void ApplyVoxObjectToWorldVox(
             ref VoxWorld voxWorld, ref NativeArray<byte> voxsCount, ref NativeArray<byte> voxsType, ref NativeArray<byte> voxsTypeOld,
-            ref VoxObject voxObject, ref Matrix4x4 objLToWPrev, ref Matrix4x4 objLToWNow)
+            ref VoxObject voxObject, ref Matrix4x4 objLToWPrev, ref Matrix4x4 objLToWNow, ref VoxTransform voxTrans, bool unapplyOnly = false)
         {
             //Get voxs nativeArray from pointer
             NativeArray<int> voxs = NativeArrayUnsafeUtility.ConvertExistingDataToNativeArray<int>(
@@ -233,7 +36,7 @@ namespace zombVoxels
             int vCountYZ = voxObject.vCountYZ;
             int vCountZ = voxObject.vCountZ;
             int vwCountZ = voxWorld.vCountZ;
-            int vwCountZY = voxWorld.vCountZY;
+            int vwCountZY = voxWorld.vCountYZ;
 
             Vector3 minW;
             Vector3 xDirW;
@@ -247,12 +50,8 @@ namespace zombVoxels
             int wvIndex;
             int remainderAfterZ;
 
-            //Waint until no other thread is accessing voxObject
-            //Write+Read to voxObject
-            //Unlock voxObject to allow other thread to Write+Read if needed
-
-            //Remove voxels from worldVoxels
-            if (voxObject.isAppliedToWorld == true)
+            //Unapply voxels from worldVoxels
+            if (voxTrans.isAppliedToWorld == true)
             {
                 //Convert local voxel grid to prev worldSpace
                 minW = objLToWPrev.MultiplyPoint3x4(voxObject.minL);
@@ -279,14 +78,20 @@ namespace zombVoxels
                         voxsTypeOld[wvIndex] = 0;
                     }
 
-                    if (thisType == vType)
+                    if (thisType == vType && (vTypeO > 0 || voxsCount[wvIndex] == 0))
                     {
                         vType = vTypeO;
                         voxsType[wvIndex] = vTypeO;
                     }
                 }
             }
-            else voxObject.isAppliedToWorld = true;
+            else voxTrans.isAppliedToWorld = true;
+
+            if (unapplyOnly == true)
+            {
+                voxTrans.isAppliedToWorld = false;
+                return;
+            }
 
             //Convert local voxel grid to now worldSpace
             minW = objLToWNow.MultiplyPoint3x4(voxObject.minL);
@@ -294,7 +99,7 @@ namespace zombVoxels
             yDirW = objLToWNow.MultiplyVector(voxObject.yDirL) * VoxGlobalSettings.voxelSizeWorld;
             zDirW = objLToWNow.MultiplyVector(voxObject.zDirL) * VoxGlobalSettings.voxelSizeWorld;
 
-            //Add voxels to worldVoxels
+            //Apply voxels to worldVoxels
             foreach (int vox in voxs)
             {
                 remainderAfterZ = vox % vCountYZ;
@@ -311,6 +116,22 @@ namespace zombVoxels
                 if (vType == 0 || vType > thisType) voxsTypeOld[wvIndex] = thisType;
             }
         }
+
+        [BurstCompile]
+        public static void WVoxIndexToPos(ref int wvoxIndex, ref Vector3 resultPos, ref VoxWorld voxWorld)
+        {
+            int remainderAfterZ = wvoxIndex % voxWorld.vCountYZ;
+            resultPos = new Vector3(wvoxIndex / voxWorld.vCountYZ, remainderAfterZ / voxWorld.vCountZ, remainderAfterZ % voxWorld.vCountZ) * VoxGlobalSettings.voxelSizeWorld;
+        }
+
+        [BurstCompile]
+        public static void PosToWVoxIndex(ref Vector3 pos, ref int resultWVoxIndex, ref VoxWorld voxWorld)
+        {
+            //Its half a voxel off, only solution is to round to int or offset result but not worth performance cost?
+            resultWVoxIndex = (int)(pos.z / VoxGlobalSettings.voxelSizeWorld)
+                + ((int)(pos.y / VoxGlobalSettings.voxelSizeWorld) * voxWorld.vCountZ)
+                + ((int)(pos.x / VoxGlobalSettings.voxelSizeWorld) * voxWorld.vCountYZ);
+        }
     }
 
     public static class VoxHelpFunc
@@ -324,66 +145,18 @@ namespace zombVoxels
         }
 
         /// <summary>
-        /// Voxelizes the given mesh, returns voxel positions in mesh localSpace. The voxels has the size defined in voxGlobalSettings.cs
-        /// </summary>
-        public static HashSet<Vector3> VoxelizeMesh(Vector3[] vers, int[] tris, Bounds meshBounds, Vector3 meshWorldScale)
-        {
-            //We could potentially improve performance by only allowing uniform scale, is it worth it?
-            //Get voxel size and count
-            HashSet<Vector3> voxelPoss = new();
-            //Vector3 voxelSize = meshWorldScale * VoxGlobalSettings.voxelSizeWorld;
-            Vector3 voxelSize = new(VoxGlobalSettings.voxelSizeWorld / meshWorldScale.x, VoxGlobalSettings.voxelSizeWorld / meshWorldScale.y, VoxGlobalSettings.voxelSizeWorld / meshWorldScale.z);
-            Vector3 bSize = meshBounds.size + (voxelSize * 2.0f);
-            int vCountX = Mathf.CeilToInt(bSize.x / voxelSize.x);
-            int vCountY = Mathf.CeilToInt(bSize.y / voxelSize.y);
-            int vCountZ = Mathf.CeilToInt(bSize.z / voxelSize.z);
-
-            Vector3 bStart = meshBounds.min - voxelSize;
-            int trisCount = tris.Length;
-            Bounds voxBounds = new(Vector3.zero, voxelSize);
-
-            //Get what voxels are overlapping and add them to hashset
-            for (int x = 0; x < vCountX; x++)
-            {
-                for (int y = 0; y < vCountY; y++)
-                {
-                    for (int z = 0; z < vCountZ; z++)
-                    {
-                        bool doOverlap = false;
-                        var voxPos = Vector3.Scale(new Vector3(x, y, z), voxelSize) + bStart;
-                        voxBounds.center = voxPos;
-
-                        for (int tI = 0; tI < trisCount; tI += 3)
-                        {
-                            if (VoxHelpBurst.DoBoxOverlapTriangel(ref vers[tris[tI]], ref vers[tris[tI + 1]], ref vers[tris[tI + 2]], ref voxBounds) == false) continue;
-
-                            doOverlap = true;
-                            break;
-                        }
-
-                        if (doOverlap == false) continue;
-
-                        voxelPoss.Add(voxPos);
-                    }
-                }
-            }
-
-            return voxelPoss;
-        }
-
-        /// <summary>
         /// Voxelizes the given collider, returns voxel positions in collider transform localSpace. The voxels has the size defined in voxGlobalSettings.cs
         /// </summary>
-        public static VoxObject.VoxObjectSaveable VoxelizeCollider(Collider col, byte colVoxType = 0)
+        public static VoxObject.VoxObjectSaveable VoxelizeCollider(Collider col, byte colVoxType = 1)
         {
             Vector3 voxelSize = VoxGlobalSettings.voxelSizeWorld * Vector3.one;
             Bounds colBounds = col.bounds;
             Matrix4x4 colWToL = col.transform.worldToLocalMatrix;
 
             Vector3 bSize = colBounds.size + (voxelSize * 2.0f);
-            int vCountX = Mathf.CeilToInt(bSize.x / voxelSize.x);
-            int vCountY = Mathf.CeilToInt(bSize.y / voxelSize.y);
-            int vCountZ = Mathf.CeilToInt(bSize.z / voxelSize.z);
+            int vCountX = (int)Math.Ceiling(bSize.x / voxelSize.x);
+            int vCountY = (int)Math.Ceiling(bSize.y / voxelSize.y);
+            int vCountZ = (int)Math.Ceiling(bSize.z / voxelSize.z);
 
             Vector3 bStart = colBounds.min - voxelSize;
             Collider[] hitCols = new Collider[8];
@@ -436,7 +209,7 @@ namespace zombVoxels
                 zDirL = colWToL.MultiplyVector(Vector3.forward),
                 minL = colWToL.MultiplyPoint3x4(bStart),
                 voxType = colVoxType,
-                objIndex = -1//We assign this later when we actually add the real voxelObject
+                //objIndex = -1//We assign this later when we actually add the real voxelObject
             };
         }
 
@@ -520,9 +293,9 @@ namespace zombVoxels
 
             unchecked
             {
-                colId = colId * 31 + bExtents.x.GetHashCode();
-                colId = colId * 31 + bExtents.y.GetHashCode();
-                colId = colId * 31 + bExtents.z.GetHashCode();
+                colId = colId * 31 + (int)Math.Round(bExtents.x * 1000);
+                colId = colId * 31 + (int)Math.Round(bExtents.y * 1000);
+                colId = colId * 31 + (int)Math.Round(bExtents.z * 1000);
                 colId = colId * 31 + objType.GetHashCode();
             }
 

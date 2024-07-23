@@ -19,12 +19,10 @@ namespace zombVoxels
         public int vCountYZ;
         public int vCountZ;
         public byte voxType;
-        [MarshalAs(UnmanagedType.U1)] public bool isAppliedToWorld;
 
         [System.Serializable]
         public class VoxObjectSaveable
         {
-            public int objIndex;
             public int[] voxs;
             public Vector3 xDirL;
             public Vector3 yDirL;
@@ -44,7 +42,7 @@ namespace zombVoxels
         public int vCountX;
 #endif
         public int vCountZ;
-        public int vCountZY;
+        public int vCountYZ;
     }
 
     [System.Serializable]
@@ -59,6 +57,7 @@ namespace zombVoxels
     {
         public void* colIds_ptr;
         public int colIds_lenght;
+        [MarshalAs(UnmanagedType.U1)] public bool isAppliedToWorld;
 
         [System.Serializable]
         public class VoxTransformSavable
