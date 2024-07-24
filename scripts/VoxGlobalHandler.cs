@@ -347,6 +347,23 @@ namespace zombVoxels
         private List<NativeArray<int>> voxObjectVoxs = new();
         private TransformAccessArray voxelObjTranss;
 
+        /// <summary>
+        /// Returns a valid VoxGlobalHandler, returns null if no valid VoxGlobalHandler is found
+        /// </summary>
+        /// <returns></returns>
+        public static VoxGlobalHandler TryGetValidGlobalHandler()
+        {
+            var vHandler = GameObject.FindAnyObjectByType<VoxGlobalHandler>(FindObjectsInactive.Exclude);
+
+            if (vHandler == null)
+            {
+                Debug.LogError("There is no active VoxGlobalHandler in the current scene");
+                return null;
+            }
+
+            return vHandler;
+        }
+
         #endregion VoxelWorldManagement
 
 

@@ -95,13 +95,9 @@ public class VoxParent : MonoBehaviour
     {
         if (voxGlobal == null)
         {
-            voxGlobal = GameObject.FindAnyObjectByType<VoxGlobalHandler>(FindObjectsInactive.Exclude);
+            voxGlobal = VoxGlobalHandler.TryGetValidGlobalHandler();
 
-            if (voxGlobal == null)
-            {
-                Debug.LogError("There is no active VoxGlobalHandler in the current scene");
-                return false;
-            }
+            if (voxGlobal == null) return false;
         }
 
         return true;
