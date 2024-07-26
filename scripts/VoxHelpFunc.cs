@@ -9,6 +9,7 @@ using System.Linq;
 using Unity.Collections.LowLevel.Unsafe;
 using System.Threading;
 using System;
+using Unity.VisualScripting.Antlr3.Runtime.Tree;
 
 namespace zombVoxels
 {
@@ -131,6 +132,16 @@ namespace zombVoxels
             resultWVoxIndex = (int)(pos.z / VoxGlobalSettings.voxelSizeWorld)
                 + ((int)(pos.y / VoxGlobalSettings.voxelSizeWorld) * voxWorld.vCountZ)
                 + ((int)(pos.x / VoxGlobalSettings.voxelSizeWorld) * voxWorld.vCountYZ);
+        }
+
+        [BurstCompile]
+        public static void GetVoxelCountBetweenWVoxIndexs(int voxA, int voxB, ref int resultCount, ref VoxWorld voxWorld)
+        {
+            resultCount = math.abs((voxA % voxWorld.vCountZ) - (voxB % voxWorld.vCountZ));
+            voxA /= voxWorld.vCountZ;
+            voxB /= voxWorld.vCountZ;
+            resultCount += math.abs((voxA % voxWorld.vCountY) - (voxB % voxWorld.vCountY))
+                + math.abs((voxA / voxWorld.vCountY) - (voxB / voxWorld.vCountY));
         }
     }
 

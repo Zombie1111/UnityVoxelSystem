@@ -144,7 +144,7 @@ Transform:
   m_GameObject: {fileID: 454923150}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 75.93887, y: -37.18393, z: 65.77888}
+  m_LocalPosition: {x: 72.2, y: 28.31, z: 33.37}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -253,6 +253,37 @@ Transform:
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 55.6, y: 17.77, z: 41.49}
   m_LocalScale: {x: 23.6711, y: 2.0788, z: 17.079243}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &629348966
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 629348967}
+  m_Layer: 0
+  m_Name: debugTrans (1)
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &629348967
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 629348966}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 54.22, y: 28.309998, z: 33.37}
+  m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}
@@ -728,6 +759,7 @@ MonoBehaviour:
   transToColIds:
     dictionaryList: []
   debugTrams: {fileID: 454923151}
+  debugTramsB: {fileID: 629348967}
 --- !u!4 &2401749211043727931
 Transform:
   m_ObjectHideFlags: 0
@@ -871,3 +903,4 @@ SceneRoots:
   - {fileID: 1472218366}
   - {fileID: 1468806177}
   - {fileID: 454923151}
+  - {fileID: 629348967}

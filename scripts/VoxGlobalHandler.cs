@@ -536,6 +536,7 @@ namespace zombVoxels
 #if UNITY_EDITOR
         private Vector3 oldWorldScaleAxis = Vector3.zero;
         public Transform debugTrams;
+        public Transform debugTramsB;
 
         private void OnDrawGizmos()
         {
@@ -552,6 +553,17 @@ namespace zombVoxels
                 VoxHelpBurst.PosToWVoxIndex(ref pos, ref vI, ref voxWorld);
                 VoxHelpBurst.WVoxIndexToPos(ref vI, ref pos, ref voxWorld);
                 Gizmos.DrawCube(pos, Vector3.one * VoxGlobalSettings.voxelSizeWorld);
+
+                Vector3 posB = debugTramsB.position;
+                int vIB = 0;
+                VoxHelpBurst.PosToWVoxIndex(ref posB, ref vIB, ref voxWorld);
+                VoxHelpBurst.WVoxIndexToPos(ref vIB, ref posB, ref voxWorld);
+                Gizmos.DrawCube(posB, Vector3.one * VoxGlobalSettings.voxelSizeWorld);
+
+                Gizmos.DrawLine(pos, posB);
+                int voxDis = 0;
+                VoxHelpBurst.GetVoxelCountBetweenWVoxIndexs(vI, vIB, ref voxDis, ref voxWorld);
+                Debug.Log("Actual dis: " + Vector3.Distance(pos, posB) + " vox dis: " + (voxDis * VoxGlobalSettings.voxelSizeWorld));
             }
         }
 
