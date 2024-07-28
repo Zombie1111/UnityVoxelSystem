@@ -457,8 +457,21 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   worldScaleAxis: {x: 1, y: 0.5, z: 1}
   transToColIds:
-    dictionaryList: []
+    dictionaryList:
+    - Key: {fileID: 542478110}
+      Value:
+        colIds: 1741a36d
+        transIndex: -1
+      index: 0
+      isKeyDuplicated: 0
+    - Key: {fileID: 2401749211043727931}
+      Value:
+        colIds: 259b2e0c
+        transIndex: -1
+      index: 1
+      isKeyDuplicated: 0
   debugTrams: {fileID: 0}
+  debugTramsB: {fileID: 0}
 --- !u!4 &2401749211043727931
 Transform:
   m_ObjectHideFlags: 0
@@ -589,7 +602,10 @@ MonoBehaviour:
   ignoreChildren: 0
   affectSelf: 1
   affectChildren: 1
-  voxCols: []
+  voxCols:
+  - col: {fileID: 8234654202685583752}
+    colId: 204380965
+    colType: 8
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

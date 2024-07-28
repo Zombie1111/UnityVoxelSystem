@@ -170,6 +170,11 @@ namespace zombVoxels
         private struct FindPath_work : IJob
         {
             public NativeReference<PathPendingRequest> activeRequest;
+            /// <summary>
+            /// The type this global voxel is, always air if voxsCount[X] is 0
+            /// </summary>
+            public NativeArray<byte> voxsType;
+            public NativeReference<VoxWorld> voxWorld;
 
             public unsafe void Execute()
             {
