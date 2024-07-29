@@ -220,8 +220,15 @@ namespace zombVoxels
         public void ClearRuntimeVoxelSystem()
         {
             if (voxRuntimeIsValid == false) return;
-            ComputeVoxels_end();
+            ComputeVoxels_end(false);
             voxRuntimeIsValid = false;
+
+            //Make sure no globalReadAccess
+            if (globalHasReadAccess == true)
+            {
+                globalHasReadAccess = false;
+                OnGlobalReadAccessStop?.Invoke();
+            }
 
             //Dispose voxel transforms
             int transCount = transColIds.Count;
@@ -384,7 +391,7 @@ namespace zombVoxels
 
         private void LateUpdate()
         {
-            ComputeVoxels_end();
+            ComputeVoxels_end(true);
         }
 
         private void ComputeVoxels_start()
@@ -393,8 +400,11 @@ namespace zombVoxels
 
             //Global read access stops here
             //Internal read+write access starts here
-            globalHasReadAccess = false;
-            OnGlobalReadAccessStop?.Invoke();
+            if (globalHasReadAccess == true)
+            {
+                globalHasReadAccess = false;
+                OnGlobalReadAccessStop?.Invoke();
+            }
 
             //Add new transforms and objects to voxel system
             foreach (var newTrans in newVoxelTrans)
@@ -422,7 +432,7 @@ namespace zombVoxels
 
         private bool globalHasReadAccess = true;
 
-        private void ComputeVoxels_end()
+        private void ComputeVoxels_end(bool giveGlobalReadAccess = true)
         {
             if (gtdCvo_jobIsActive == false) return;
             
@@ -432,12 +442,14 @@ namespace zombVoxels
             cvo_handle.Complete();
 
             //Internal read+write access stops here
-            //Global read access starts here   
+            //Global read access starts here
+            if (giveGlobalReadAccess == false || globalHasReadAccess == true) return;
+
             globalHasReadAccess = true;
             OnGlobalReadAccessStart?.Invoke();
         }
 
-        private ComputeVoxelWorld_work cvo_job;
+        [System.NonSerialized] public ComputeVoxelWorld_work cvo_job;
         private GetTransformData_work gtd_job;
         private JobHandle cvo_handle;
         private JobHandle gtd_handle;
@@ -475,7 +487,7 @@ namespace zombVoxels
         }
 
         [BurstCompile]
-        private struct ComputeVoxelWorld_work : IJob
+        public struct ComputeVoxelWorld_work : IJob
         {
             public NativeList<VoxTransform> voxTranss;
             public NativeHashMap<int, VoxObject> colIdToVoxObject;
@@ -546,184 +558,35 @@ namespace zombVoxels
                 oldWorldScaleAxis = worldScaleAxis;
             }
 
-            if (Application.isPlaying == true)
-            {
-                Vector3 pos = debugTrams.position;
-                int vI = 0;
-                VoxHelpBurst.PosToWVoxIndex(ref pos, ref vI, ref voxWorld);
-                VoxHelpBurst.WVoxIndexToPos(ref vI, ref pos, ref voxWorld);
-                Gizmos.DrawCube(pos, Vector3.one * VoxGlobalSettings.voxelSizeWorld);
-
-                byte result = 0;
-                Debug_toggleTimer();
-                for (int i = 0; i < 10000; i++)
-                {
-                    result = IsVoxelValidClimb(vI, 6);
-                }
-                Debug_toggleTimer();
-                Debug.Log(result);
-
-                Vector3 posB = debugTramsB.position;
-                int vIB = 0;
-                VoxHelpBurst.PosToWVoxIndex(ref posB, ref vIB, ref voxWorld);
-                VoxHelpBurst.WVoxIndexToPos(ref vIB, ref posB, ref voxWorld);
-                Gizmos.DrawCube(posB, Vector3.one * VoxGlobalSettings.voxelSizeWorld);
-
-                Gizmos.DrawLine(pos, posB);
-                int voxDis = 0;
-                VoxHelpBurst.GetVoxelCountBetweenWVoxIndexs(vI, vIB, ref voxDis, ref voxWorld);
-                Debug.Log("Actual dis: " + Vector3.Distance(pos, posB) + " vox dis: " + (voxDis * VoxGlobalSettings.voxelSizeWorld));
-            }
-
-            byte IsVoxelValidClimb(int voxI, byte size)
-            {
-                if (cvo_job.voxsType[voxI] > 0) return 0;
-
-                byte vType = 0;
-                bool dirXA = false;
-                bool dirXB = false;
-                bool dirYA = false;
-                bool dirYB = false;
-                bool dirZA = false;
-                bool dirZB = false;
-
-                //Always check 1 radius
-                //X
-                byte temp = cvo_job.voxsType[voxI + 1];
-                if (temp > 0)
-                {
-                    vType = temp;
-                    dirXA = true;
-                }
-
-                temp = cvo_job.voxsType[voxI - 1];
-                if (temp > 0)
-                {
-                    vType = temp;
-                    dirXB = true;
-                }
-
-                //Y
-                temp = cvo_job.voxsType[voxI + voxWorld.vCountZ];
-                if (temp > 0)
-                {
-                    vType = temp;
-                    dirYA = true;
-                }
-
-                temp = cvo_job.voxsType[voxI - voxWorld.vCountZ];
-                if (temp > 0)
-                {
-                    vType = temp;
-                    dirYB = true;
-                }
-
-                //Z
-                temp = cvo_job.voxsType[voxI + voxWorld.vCountYZ];
-                if (temp > 0)
-                {
-                    vType = temp;
-                    dirZA = true;
-                }
-
-                temp = cvo_job.voxsType[voxI - voxWorld.vCountYZ];
-                if (temp > 0)
-                {
-                    vType = temp;
-                    dirZB = true;
-                }
-
-                if (vType == 0)
-                {
-                    //Found no ground in streight directions but we also must check sideways for any ground
-                    //+X+Z-
-                    temp = cvo_job.voxsType[voxI + 1 + voxWorld.vCountYZ - voxWorld.vCountZ];
-                    if (temp > 0)
-                    {
-                        vType = temp;
-                        goto SkipNoGroundReturn;
-                    }
-
-                    //+X+Z+Y
-                    temp = cvo_job.voxsType[voxI + 1 + voxWorld.vCountYZ + voxWorld.vCountZ];
-                    if (temp > 0)
-                    {
-                        vType = temp;
-                        goto SkipNoGroundReturn;
-                    }
-
-                    //+X-Z+Y
-                    temp = cvo_job.voxsType[voxI + 1 - voxWorld.vCountYZ + voxWorld.vCountZ];
-                    if (temp > 0)
-                    {
-                        vType = temp;
-                        goto SkipNoGroundReturn;
-                    }
-
-                    //+X-Z-Y
-                    temp = cvo_job.voxsType[voxI + 1 - voxWorld.vCountYZ - voxWorld.vCountZ];
-                    if (temp > 0)
-                    {
-                        vType = temp;
-                        goto SkipNoGroundReturn;
-                    }
-
-                    //-X+Z-Y
-                    temp = cvo_job.voxsType[voxI - 1 + voxWorld.vCountYZ - voxWorld.vCountZ];
-                    if (temp > 0)
-                    {
-                        vType = temp;
-                        goto SkipNoGroundReturn;
-                    }
-
-                    //-X+Z+Y
-                    temp = cvo_job.voxsType[voxI - 1 + voxWorld.vCountYZ + voxWorld.vCountZ];
-                    if (temp > 0)
-                    {
-                        vType = temp;
-                        goto SkipNoGroundReturn;
-                    }
-
-                    //-X-Z+Y
-                    temp = cvo_job.voxsType[voxI - 1 - voxWorld.vCountYZ + voxWorld.vCountZ];
-                    if (temp > 0)
-                    {
-                        vType = temp;
-                        goto SkipNoGroundReturn;
-                    }
-
-                    //-X-Z-Y
-                    temp = cvo_job.voxsType[voxI - 1 - voxWorld.vCountYZ - voxWorld.vCountZ];
-                    if (temp > 0)
-                    {
-                        vType = temp;
-                        goto SkipNoGroundReturn;
-                    }
-
-                    return 0;
-                }
-
-                SkipNoGroundReturn:;
-
-                //Check wider radius
-                for (temp = 2; temp < size; temp++)
-                {
-                    if (cvo_job.voxsType[voxI + temp] > 0) dirXA = true;
-                    if (cvo_job.voxsType[voxI - temp] > 0) dirXB = true;
-
-                    if (cvo_job.voxsType[voxI + (voxWorld.vCountZ * temp)] > 0) dirYA = true;
-                    if (cvo_job.voxsType[voxI - (voxWorld.vCountZ * temp)] > 0) dirYB = true;
-
-                    if (cvo_job.voxsType[voxI + (voxWorld.vCountYZ * temp)] > 0) dirZA = true;
-                    if (cvo_job.voxsType[voxI - (voxWorld.vCountYZ * temp)] > 0) dirZB = true;
-                }
-
-                //Check if fit
-                if (dirXA == true && dirXB == true) return 0;
-                if (dirYA == true && dirYB == true) return 0;
-                if (dirZA == true && dirZB == true) return 0;
-                return vType;
-            }
+            //Debug stuff
+            //if (Application.isPlaying == true)
+            //{
+            //    Vector3 pos = debugTrams.position;
+            //    int vI = 0;
+            //    VoxHelpBurst.PosToWVoxIndex(ref pos, ref vI, ref voxWorld);
+            //    VoxHelpBurst.WVoxIndexToPos(ref vI, ref pos, ref voxWorld);
+            //    Gizmos.DrawCube(pos, Vector3.one * VoxGlobalSettings.voxelSizeWorld);
+            //
+            //    byte result = 0;
+            //    Debug_toggleTimer();
+            //    for (int i = 0; i < 10000; i++)
+            //    {
+            //        result = IsVoxelValidClimb(vI, 6);
+            //    }
+            //    Debug_toggleTimer();
+            //    Debug.Log(result);
+            //
+            //    Vector3 posB = debugTramsB.position;
+            //    int vIB = 0;
+            //    VoxHelpBurst.PosToWVoxIndex(ref posB, ref vIB, ref voxWorld);
+            //    VoxHelpBurst.WVoxIndexToPos(ref vIB, ref posB, ref voxWorld);
+            //    Gizmos.DrawCube(posB, Vector3.one * VoxGlobalSettings.voxelSizeWorld);
+            //
+            //    Gizmos.DrawLine(pos, posB);
+            //    ushort voxDis = 0;
+            //    VoxHelpBurst.GetVoxelCountBetweenWVoxIndexs(vI, vIB, ref voxDis, ref voxWorld);
+            //    Debug.Log("Actual dis: " + Vector3.Distance(pos, posB) + " vox dis: " + (voxDis * VoxGlobalSettings.voxelSizeWorld));
+            //}
         }
 
         private class EditorVoxToDraw

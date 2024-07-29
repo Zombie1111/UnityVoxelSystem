@@ -135,18 +135,35 @@ namespace zombVoxels
         }
 
         [BurstCompile]
-        public static void GetVoxelCountBetweenWVoxIndexs(int voxA, int voxB, ref int resultCount, ref VoxWorld voxWorld)
+        public static void GetVoxelCountBetweenWVoxIndexs(int voxA, int voxB, ref ushort resultCount, ref VoxWorld voxWorld)
         {
-            resultCount = math.abs((voxA % voxWorld.vCountZ) - (voxB % voxWorld.vCountZ));
+            resultCount = (ushort)math.abs((voxA % voxWorld.vCountZ) - (voxB % voxWorld.vCountZ));
             voxA /= voxWorld.vCountZ;
             voxB /= voxWorld.vCountZ;
-            resultCount += math.abs((voxA % voxWorld.vCountY) - (voxB % voxWorld.vCountY))
-                + math.abs((voxA / voxWorld.vCountY) - (voxB / voxWorld.vCountY));
+            resultCount += (ushort)(math.abs((voxA % voxWorld.vCountY) - (voxB % voxWorld.vCountY))
+                + math.abs((voxA / voxWorld.vCountY) - (voxB / voxWorld.vCountY)));
         }
     }
 
     public static class VoxHelpFunc
     {
+        /// <summary>
+        /// Returns a NativeHashMap with the given allocator containing the same KeyValue pairs as the SerializableDictionary
+        /// </summary>
+        public static NativeHashMap<TKey, TValue> ToNativeHashMap<TKey, TValue>(this SerializableDictionary<TKey, TValue> dic, Allocator allocator)
+            where TKey : unmanaged, IEquatable<TKey>
+            where TValue : unmanaged
+        {
+            var newNat = new NativeHashMap<TKey, TValue>(dic.Count, allocator);
+
+            foreach (var kvp in dic)
+            {
+                newNat.Add(kvp.Key, kvp.Value);
+            }
+
+            return newNat;
+        }
+
         /// <summary>
         /// Returns the value of xyz added togehter
         /// </summary>

@@ -8,13 +8,17 @@ namespace zombVoxels
     {
         #region SetupPathNpc
 
-        [SerializeField] private bool autoUpdatePath = true;
+        [SerializeField] private Transform startTarget;
+        [SerializeField] private Transform endTarget;
         [SerializeField] private bool discardPendingUpdatesOnRequest = true;
         [SerializeField] private VoxPathfinder.PathRequest pathProperties = new();
         [SerializeField] private VoxPathfinder pathfinder = null;
+        private VoxGlobalHandler globalHandler;
 
         private void Awake()
         {
+            globalHandler = VoxGlobalHandler.TryGetValidGlobalHandler();
+            if (globalHandler == null) return;
             if (pathfinder == null) pathfinder = GameObject.FindAnyObjectByType<VoxPathfinder>(FindObjectsInactive.Include);
             SetPathfinder(pathfinder);
         }
@@ -45,6 +49,22 @@ namespace zombVoxels
         private void OnDestroy()
         {
             SetPathfinder(null);
+        }
+
+        private void Update()
+        {
+            if (startTarget == null || endTarget == null) return;
+
+            int resultV = 0;
+            Vector3 pos = startTarget.position;
+            VoxHelpBurst.PosToWVoxIndex(ref pos, ref resultV, ref globalHandler.voxWorld);
+            pathProperties.startVoxIndex = resultV;
+
+            pos = endTarget.position;
+            VoxHelpBurst.PosToWVoxIndex(ref pos, ref resultV, ref globalHandler.voxWorld);
+            pathProperties.endVoxIndex = resultV;
+
+            RequestUpdatePath();
         }
 
         #endregion SetupPathNpc
@@ -93,7 +113,16 @@ namespace zombVoxels
         {
             if (pendingRequestIds.Remove(requestId) == false) return;
 
-
+            //Debug log path
+            Vector3 prevPos = endTarget.position; 
+            Vector3 nowPos = Vector3.zero; 
+            foreach (int voxI in pathfinder.fp_job._resultPath)
+            {
+                int voxII = voxI;
+                VoxHelpBurst.WVoxIndexToPos(ref voxII, ref nowPos, ref globalHandler.voxWorld);
+                Debug.DrawLine(prevPos, nowPos, Color.red, 0.1f, true);
+                prevPos = nowPos;
+            }
         }
 
         private void OnPathRequestDiscarded(int requestId)
