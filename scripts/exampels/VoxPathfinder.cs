@@ -5,6 +5,7 @@ using Unity.Burst;
 using Unity.Collections;
 using Unity.Jobs;
 using Unity.Mathematics;
+using Unity.VisualScripting.FullSerializer;
 using UnityEditor;
 using UnityEngine;
 
@@ -124,12 +125,12 @@ namespace zombVoxels
 
             pendingRequests.Enqueue(new()
             {
-                 endVoxIndex = pathRequest.endVoxIndex,
-                 pathType = pathRequest.pathType,
-                 radius = pathRequest.radius,
-                 startVoxIndex = pathRequest.startVoxIndex,
-                 snapRadius = pathRequest.snapRadius,
-                 requestId = nextRequestId,
+                endVoxIndex = pathRequest.endVoxIndex,
+                pathType = pathRequest.pathType,
+                radius = pathRequest.radius,
+                startVoxIndex = pathRequest.startVoxIndex,
+                snapRadius = pathRequest.snapRadius,
+                requestId = nextRequestId,
             });
 
             return nextRequestId;
@@ -142,6 +143,7 @@ namespace zombVoxels
 
         private void OnGlobalReadAccessStart()
         {
+            //Only check 
             if (fp_jobIsActive == true) return;
 
             TryGetActiveRequestAgain:;
@@ -234,6 +236,8 @@ namespace zombVoxels
                 int vCountZ = vWorld.vCountZ;
                 int vCountYZ = vWorld.vCountYZ;
                 byte aiSize = request.radius;
+                int aiSizeExtented = aiSize + 2;
+                float voxSizeSqr = VoxGlobalSettings.voxelSizeWorld * VoxGlobalSettings.voxelSizeWorld * (aiSize / 2.0f);
 
                 //Reset arrays
                 toSearchValue.Clear();
@@ -243,20 +247,28 @@ namespace zombVoxels
 
                 //Create temp variabels
                 int tempI;
-                int tempVoxI;
+                int activeVoxI;
                 int tempVoxA;
                 int tempVoxB;
-                byte tempDirI;
+                byte activeDirI;
                 byte tempType;
-                byte tempTypeUsed;
+                byte activeType;
                 bool tempDirXA;
                 bool tempDirXB;
                 bool tempDirYA;
                 bool tempDirYB;
                 bool tempDirZA;
                 bool tempDirZB;
-                int tempVValue;
+                ushort tempVValue;
                 int tempLoop;
+                Vector3 tempPosA = Vector3.zero;
+                Vector3 tempPosB = Vector3.zero;
+                Vector3 tempPosC = Vector3.zero;
+                Vector3 tempDirA = Vector3.zero;
+                Vector3 tempDirB = Vector3.zero;
+                int tempDeltaX;
+                int tempDeltaY;
+                int tempDeltaZ;
 
                 int toSearchCount;
                 int closestVoxV;
@@ -266,11 +278,18 @@ namespace zombVoxels
                 int endVoxI = request.endVoxIndex;
                 if (snapRadius > 0)
                 {
-                    toSearchCount = 0;
-                    tempDirI = 1;
+                    toSearchCount = -1;
+                    activeDirI = 1;
                     closestVoxV = 0;
 
-                    startVoxI = SnapToValidVoxel(startVoxI);
+#pragma warning disable CS0162
+                    switch (request.pathType)
+                    {
+                        case PathType.climbing: startVoxI = SnapToValidVoxelClimbing(startVoxI); break;
+                        case PathType.walk: throw new NotImplementedException(); break;
+                        case PathType.flying: throw new NotImplementedException(); break;
+                    }
+#pragma warning restore CS0162
 
                     vSearched.Clear();//Reset stuff used in snapping
                     toSearchValue.Clear();
@@ -301,15 +320,22 @@ namespace zombVoxels
 
                 //Recreate the path
                 int voxOnPath = closestVoxI;
-                //vSearched[startVoxI] = 0;//So while loop stops when reached startVoxI
+                int prevDir = 0;
                 vSearched.Remove(startVoxI);
+
                 while (true)
                 {
-                    if (vSearched.TryGetValue(voxOnPath, out tempDirI) == false) break;
-                    //if (tempDirI == 0) return;
-                    _resultPath.Add(voxOnPath);
+                    if (vSearched.TryGetValue(voxOnPath, out activeDirI) == false)
+                    {
+                        _resultPath.Add(voxOnPath);
+                        break;
+                    }
 
-                    switch (tempDirI)
+                    //_resultPath.Add(voxOnPath);
+                    if (activeDirI != prevDir) _resultPath.Add(voxOnPath);
+                    prevDir = activeDirI;
+
+                    switch (activeDirI)
                     {
                         case 1:
                             voxOnPath--; break;
@@ -326,6 +352,13 @@ namespace zombVoxels
                     }
                 }
 
+                ////Optimize path
+                //for (int i = _resultPath.Length - 1; i > 1 ; i--)
+                //{
+                //    if (voxelLineCast(_resultPath[i], _resultPath[i - 2]) == false) continue;
+                //    _resultPath.RemoveAt(i - 1);
+                //}
+
                 void DoPathfindClimbing()
                 {
                     while (toSearchCount > -1)
@@ -339,206 +372,99 @@ namespace zombVoxels
                         toSearchValue.RemoveAt(toSearchCount);
                         toSearchCount--;
 
-                        tempVoxI = tempI + 1;
-                        tempDirI = 1;
+                        activeVoxI = tempI + 1;
+                        activeDirI = 1;
                         CheckVoxIndexClimbing();
 
-                        tempVoxI = tempI - 1;
-                        tempDirI = 2;
+                        activeVoxI = tempI - 1;
+                        activeDirI = 2;
                         CheckVoxIndexClimbing();
 
-                        tempVoxI = tempI + vCountZ;
-                        tempDirI = 3;
+                        activeVoxI = tempI + vCountZ;
+                        activeDirI = 3;
                         CheckVoxIndexClimbing();
 
-                        tempVoxI = tempI - vCountZ;
-                        tempDirI = 4;
+                        activeVoxI = tempI - vCountZ;
+                        activeDirI = 4;
                         CheckVoxIndexClimbing();
 
-                        tempVoxI = tempI + vCountYZ;
-                        tempDirI = 5;
+                        activeVoxI = tempI + vCountYZ;
+                        activeDirI = 5;
                         CheckVoxIndexClimbing();
 
-                        tempVoxI = tempI - vCountYZ;
-                        tempDirI = 6;
+                        activeVoxI = tempI - vCountYZ;
+                        activeDirI = 6;
                         CheckVoxIndexClimbing();
                     }
                 }
 
                 void CheckVoxIndexClimbing()
                 {
-                    if (vSearched.TryAdd(tempVoxI, tempDirI) == false) return;
+                    //Send 8 sideways voxel casts. If aiSize - 1 is free for all casts and atleast one aiSize is overlapping voxel is valid
+                    if (vSearched.TryAdd(activeVoxI, activeDirI) == false) return;
 
                     //Check if voxel is valid
-                    if (vTypes[tempVoxI] > 0) return;
+                    if (vTypes[activeVoxI] > 0) return;
 
-                    tempTypeUsed = 0;
-                    tempDirXA = false;
-                    tempDirXB = false;
-                    tempDirYA = false;
-                    tempDirYB = false;
-                    tempDirZA = false;
-                    tempDirZB = false;
-
-                    //Always check 1 radius
-                    //X
-                    tempType = vTypes[tempVoxI + 1];
-                    if (tempType > 0)
+                    activeType = 0;
+                    for (tempLoop = 1; tempLoop < aiSize; tempLoop++)
                     {
-                        tempTypeUsed = tempType;
-                        tempDirXA = true;
-                    }
-
-                    tempType = vTypes[tempVoxI - 1];
-                    if (tempType > 0)
-                    {
-                        tempTypeUsed = tempType;
-                        tempDirXB = true;
-                    }
-
-                    //Y
-                    tempType = vTypes[tempVoxI + vCountZ];
-                    if (tempType > 0)
-                    {
-                        tempTypeUsed = tempType;
-                        tempDirYA = true;
-                    }
-
-                    tempType = vTypes[tempVoxI - vCountZ];
-                    if (tempType > 0)
-                    {
-                        tempTypeUsed = tempType;
-                        tempDirYB = true;
-                    }
-
-                    //Z
-                    tempType = vTypes[tempVoxI + vCountYZ];
-                    if (tempType > 0)
-                    {
-                        tempTypeUsed = tempType;
-                        tempDirZA = true;
-                    }
-
-                    tempType = vTypes[tempVoxI - vCountYZ];
-                    if (tempType > 0)
-                    {
-                        tempTypeUsed = tempType;
-                        tempDirZB = true;
-                    }
-
-                    if (tempTypeUsed == 0)
-                    {
-                        //Found no ground in straight directions but we also must check sideways for any ground
                         //+X+Z-Y
-                        tempType = vTypes[tempVoxI + 1 + vCountYZ - vCountZ];
-                        if (tempType > 0)
-                        {
-                            tempDirXA = true;
-                            tempDirZA = true;
-                            tempDirYB = true;
-                            tempTypeUsed = tempType;
-                            goto SkipNoGroundReturn;
-                        }
+                        if (vTypes[activeVoxI + ((1 + vCountYZ - vCountZ) * tempLoop)] > 0) { activeType = 1; break; }
+
+                         //+X+Z+Y
+                        if (vTypes[activeVoxI + ((1 + vCountYZ + vCountZ) * tempLoop)] > 0) { activeType = 1; break; }
+                        
+                         //+X-Z+Y
+                        if (vTypes[activeVoxI + ((1 - vCountYZ + vCountZ) * tempLoop)] > 0) { activeType = 1; break; }
+                         
+                         //+X-Z-Y
+                        if (vTypes[activeVoxI + ((1 - vCountYZ - vCountZ) * tempLoop)] > 0) { activeType = 1; break; }
+                        
+                         //-X+Z-Y
+                        if (vTypes[activeVoxI - ((1 + vCountYZ - vCountZ) * tempLoop)] > 0) { activeType = 1; break; }
+                        
+                         //-X+Z+Y
+                        if (vTypes[activeVoxI - ((1 + vCountYZ + vCountZ) * tempLoop)] > 0) { activeType = 1; break; }
+                        
+                         //-X-Z+Y
+                        if (vTypes[activeVoxI - ((1 - vCountYZ + vCountZ) * tempLoop)] > 0) { activeType = 1; break; }
+                        
+                         //-X-Z-Y
+                        if (vTypes[activeVoxI - ((1 - vCountYZ - vCountZ) * tempLoop)] > 0) { activeType = 1; break; }
+                    }
+
+                    if (activeType > 0) return;
+
+                    for (tempLoop = aiSize; tempLoop < aiSizeExtented; tempLoop++)
+                    {
+                        //+X+Z-Y
+                        activeType = vTypes[activeVoxI + ((1 + vCountYZ - vCountZ) * tempLoop)]; if (activeType > 0) { goto SkipReturnInvalid; }
 
                         //+X+Z+Y
-                        tempType = vTypes[tempVoxI + 1 + vCountYZ + vCountZ];
-                        if (tempType > 0)
-                        {
-                            tempDirXA = true;
-                            tempDirZA = true;
-                            tempDirYA = true;
-                            tempTypeUsed = tempType;
-                            goto SkipNoGroundReturn;
-                        }
+                        activeType = vTypes[activeVoxI + ((1 + vCountYZ + vCountZ) * tempLoop)]; if (activeType > 0) { goto SkipReturnInvalid; }
 
                         //+X-Z+Y
-                        tempType = vTypes[tempVoxI + 1 - vCountYZ + vCountZ];
-                        if (tempType > 0)
-                        {
-                            tempDirXA = true;
-                            tempDirZB = true;
-                            tempDirYA = true;
-                            tempTypeUsed = tempType;
-                            goto SkipNoGroundReturn;
-                        }
+                        activeType = vTypes[activeVoxI + ((1 - vCountYZ + vCountZ) * tempLoop)]; if (activeType > 0) { goto SkipReturnInvalid; }
 
                         //+X-Z-Y
-                        tempType = vTypes[tempVoxI + 1 - vCountYZ - vCountZ];
-                        if (tempType > 0)
-                        {
-                            tempDirXA = true;
-                            tempDirZB = true;
-                            tempDirYB = true;
-                            tempTypeUsed = tempType;
-                            goto SkipNoGroundReturn;
-                        }
+                        activeType = vTypes[activeVoxI + ((1 - vCountYZ - vCountZ) * tempLoop)]; if (activeType > 0) { goto SkipReturnInvalid; }
 
                         //-X+Z-Y
-                        tempType = vTypes[tempVoxI - 1 + vCountYZ - vCountZ];
-                        if (tempType > 0)
-                        {
-                            tempDirXB = true;
-                            tempDirZA = true;
-                            tempDirYB = true;
-                            tempTypeUsed = tempType;
-                            goto SkipNoGroundReturn;
-                        }
+                        activeType = vTypes[activeVoxI - ((1 + vCountYZ - vCountZ) * tempLoop)]; if (activeType > 0) { goto SkipReturnInvalid; }
 
                         //-X+Z+Y
-                        tempType = vTypes[tempVoxI - 1 + vCountYZ + vCountZ];
-                        if (tempType > 0)
-                        {
-                            tempDirXB = true;
-                            tempDirZA = true;
-                            tempDirYA = true;
-                            tempTypeUsed = tempType;
-                            goto SkipNoGroundReturn;
-                        }
+                        activeType = vTypes[activeVoxI - ((1 + vCountYZ + vCountZ) * tempLoop)]; if (activeType > 0) { goto SkipReturnInvalid; }
 
                         //-X-Z+Y
-                        tempType = vTypes[tempVoxI - 1 - vCountYZ + vCountZ];
-                        if (tempType > 0)
-                        {
-                            tempDirXB = true;
-                            tempDirZB = true;
-                            tempDirYA = true;
-                            tempTypeUsed = tempType;
-                            goto SkipNoGroundReturn;
-                        }
+                        activeType = vTypes[activeVoxI - ((1 - vCountYZ + vCountZ) * tempLoop)]; if (activeType > 0) { goto SkipReturnInvalid; }
 
                         //-X-Z-Y
-                        tempType = vTypes[tempVoxI - 1 - vCountYZ - vCountZ];
-                        if (tempType > 0)
-                        {
-                            tempDirXB = true;
-                            tempDirZB = true;
-                            tempDirYB = true;
-                            tempTypeUsed = tempType;
-                            goto SkipNoGroundReturn;
-                        }
-
-                        return;
+                        activeType = vTypes[activeVoxI - ((1 - vCountYZ - vCountZ) * tempLoop)]; if (activeType > 0) { goto SkipReturnInvalid; }
                     }
 
-                    SkipNoGroundReturn:;
-
-                    //Check wider radius
-                    for (tempType = 2; tempType < aiSize; tempType++)
-                    {
-                        if (vTypes[tempVoxI + tempType] > 0) tempDirXA = true;
-                        if (vTypes[tempVoxI - tempType] > 0) tempDirXB = true;
-
-                        if (vTypes[tempVoxI + (vCountZ * tempType)] > 0) tempDirYA = true;
-                        if (vTypes[tempVoxI - (vCountZ * tempType)] > 0) tempDirYB = true;
-
-                        if (vTypes[tempVoxI + (vCountYZ * tempType)] > 0) tempDirZA = true;
-                        if (vTypes[tempVoxI - (vCountYZ * tempType)] > 0) tempDirZB = true;
-                    }
-
-                    //Check if fit
-                    if (tempDirXA == true && tempDirXB == true) return;
-                    if (tempDirYA == true && tempDirYB == true) return;
-                    if (tempDirZA == true && tempDirZB == true) return;
+                    return;
+                    SkipReturnInvalid:;
 
                     //Voxel is valid, add it to path
                     AddVoxelToPath();
@@ -546,62 +472,164 @@ namespace zombVoxels
 
                 void AddVoxelToPath()
                 {
-                    //Get distance between tempVoxI and endVoxI
-                    tempVValue = math.abs((tempVoxI % vCountZ) - (endVoxI % vCountZ));
-                    tempVoxA = tempVoxI / vCountZ;
-                    tempVoxB = endVoxI / vCountZ;
-                    tempVValue += math.abs((tempVoxA % vCountY) - (tempVoxB % vCountY))
-                        + math.abs((tempVoxA / vCountY) - (tempVoxB / vCountY));
+                    ////Get distance between tempVoxI and endVoxI
+                    //tempVoxA = activeVoxI / vCountZ;
+                    //tempVoxB = endVoxI / vCountZ;
+                    //tempDeltaX = math.abs((activeVoxI % vCountZ) - (endVoxI % vCountZ));
+                    //tempDeltaY = math.abs((tempVoxA % vCountY) - (tempVoxB % vCountY));
+                    //tempDeltaZ = math.abs((tempVoxA / vCountY) - (tempVoxB / vCountY));
+                    ////tempVValue = tempDeltaX + tempDeltaY + tempDeltaZ;
+                    //double result = Math.Sqrt((tempDeltaX * tempDeltaX) + (tempDeltaY * tempDeltaY) + (tempDeltaZ * tempDeltaZ));
+                    //tempVValue = (ushort)(result * 100.0d);
 
-                    if (voxTypeToMultiply.TryGetValue(tempTypeUsed, out float tempMultiply) == true) tempVValue = (int)math.round(tempVValue * tempMultiply);
+                    tempVoxA = activeVoxI / vCountZ;
+                    tempVoxB = endVoxI / vCountZ;
+                    tempVValue = (ushort)(math.abs((activeVoxI % vCountZ) - (endVoxI % vCountZ))
+                        + math.abs((tempVoxA % vCountY) - (tempVoxB % vCountY))
+                        + math.abs((tempVoxA / vCountY) - (tempVoxB / vCountY)));
+
+                    if (voxTypeToMultiply.TryGetValue(activeType, out float tempMultiply) == true) tempVValue = (ushort)math.round(tempVValue * tempMultiply);
 
                     //Get where to insert it
-                    if (toSearchCount > 0)
+                    if (toSearchCount > -1)
                     {
                         for (tempLoop = toSearchCount; tempLoop > -1; tempLoop--)
                         {
                             if (tempVValue > toSearchValue[tempLoop]) continue;
 
-                            toSearchValue.InsertRangeWithBeginEnd(tempLoop, tempLoop + 1);
-                            toSearchValue[tempLoop] = (ushort)tempVValue;
-                            toSearchIndex.InsertRangeWithBeginEnd(tempLoop, tempLoop + 1);
-                            toSearchIndex[tempLoop] = tempVoxI;
+                            if (tempLoop + 2 > toSearchCount)
+                            {
+                                toSearchValue.Add(tempVValue);
+                                toSearchIndex.Add(activeVoxI);
+                                toSearchCount++;
+                                break;
+                            }
+
+                            toSearchValue.InsertRangeWithBeginEnd(tempLoop + 1, tempLoop + 2);
+                            toSearchValue[tempLoop] = tempVValue;
+                            toSearchIndex.InsertRangeWithBeginEnd(tempLoop + 1, tempLoop + 2);
+                            toSearchIndex[tempLoop] = activeVoxI;
                             toSearchCount++;
                             break;
                         }
                     }
                     else
                     {
-                        toSearchValue.Add((ushort)tempVValue);
-                        toSearchIndex.Add(tempVoxI);
+                        toSearchValue.Add(tempVValue);
+                        toSearchIndex.Add(activeVoxI);
                         toSearchCount++;
                     }
 
                     if (closestVoxV > tempVValue)
                     {
                         //When found new valid voxel closer to end
-                        closestVoxI = tempVoxI;
+                        closestVoxI = activeVoxI;
                         closestVoxV = tempVValue;
                     }
                 }
 
-                int SnapToValidVoxel(int snapThis)
+                int SnapToValidVoxelClimbing(int snapThis)
                 {
-                    tempVoxI = snapThis; CheckVoxIndexClimbing(); if (toSearchCount > 0) return tempVoxI;
+                    activeVoxI = snapThis; CheckVoxIndexClimbing(); if (toSearchCount > 0) return activeVoxI;
 
                     for (int rad = 1; rad < snapRadius; rad++)
                     {
-                        tempVoxI = snapThis + rad; CheckVoxIndexClimbing(); if (toSearchCount > 0) return tempVoxI;
-                        tempVoxI = snapThis - rad; CheckVoxIndexClimbing(); if (toSearchCount > 0) return tempVoxI;
+                        activeVoxI = snapThis + rad; CheckVoxIndexClimbing(); if (toSearchCount > 0) return activeVoxI;
+                        activeVoxI = snapThis - rad; CheckVoxIndexClimbing(); if (toSearchCount > 0) return activeVoxI;
 
-                        tempVoxI = snapThis + (vCountZ * rad); CheckVoxIndexClimbing(); if (toSearchCount > 0) return tempVoxI;
-                        tempVoxI = snapThis - (vCountZ * rad); CheckVoxIndexClimbing(); if (toSearchCount > 0) return tempVoxI;
+                        activeVoxI = snapThis + (vCountZ * rad); CheckVoxIndexClimbing(); if (toSearchCount > 0) return activeVoxI;
+                        activeVoxI = snapThis - (vCountZ * rad); CheckVoxIndexClimbing(); if (toSearchCount > 0) return activeVoxI;
 
-                        tempVoxI = snapThis + (vCountYZ * rad); CheckVoxIndexClimbing(); if (toSearchCount > 0) return tempVoxI;
-                        tempVoxI = snapThis - (vCountYZ * rad); CheckVoxIndexClimbing(); if (toSearchCount > 0) return tempVoxI;
+                        activeVoxI = snapThis + (vCountYZ * rad); CheckVoxIndexClimbing(); if (toSearchCount > 0) return activeVoxI;
+                        activeVoxI = snapThis - (vCountYZ * rad); CheckVoxIndexClimbing(); if (toSearchCount > 0) return activeVoxI;
                     }
 
                     return snapThis;
+                }
+
+                bool voxelLineCast(int voxIA, int voxIB)
+                {
+                    VoxHelpBurst.WVoxIndexToPos(ref voxIA, ref tempPosA, ref vWorld);
+                    VoxHelpBurst.WVoxIndexToPos(ref voxIB, ref tempPosB, ref vWorld);
+                    tempDirA = tempPosB - tempPosA;
+
+                    vSearched.Clear();
+                    toSearchIndex.Clear();
+                    toSearchIndex.Add(voxIA);
+                    toSearchCount = 0;
+
+                    while (toSearchCount > -1)
+                    {
+                        activeVoxI = toSearchIndex[toSearchCount];
+                        if (activeVoxI == voxIB) break;
+
+                        toSearchIndex.RemoveAt(toSearchCount);
+                        toSearchCount--;
+
+                        if (vSearched.TryAdd(activeVoxI, 0) == false) continue;
+                        if (vTypes[activeVoxI] > 0) continue;
+                        VoxHelpBurst.WVoxIndexToPos(ref activeVoxI, ref tempPosC, ref vWorld);
+                        if (DisToLine() > voxSizeSqr) continue;
+
+                        //+X+Z-Y
+                        if (vTypes[activeVoxI + 1 + vCountYZ - vCountZ] > 0) goto SkipIgnoreSpread;
+                        //+X+Z+Y
+                        if (vTypes[activeVoxI + 1 + vCountYZ + vCountZ] > 0) goto SkipIgnoreSpread;
+                        //+X-Z+Y
+                        if (vTypes[activeVoxI + 1 - vCountYZ + vCountZ] > 0) goto SkipIgnoreSpread;
+                        //+X-Z-Y
+                        if (vTypes[activeVoxI + 1 - vCountYZ - vCountZ] > 0) goto SkipIgnoreSpread;
+                        //-X+Z-Y
+                        if (vTypes[activeVoxI - 1 + vCountYZ - vCountZ] > 0) goto SkipIgnoreSpread;
+                        //-X+Z+Y
+                        if (vTypes[activeVoxI - 1 + vCountYZ + vCountZ] > 0) goto SkipIgnoreSpread;
+                        //-X-Z+Y
+                        if (vTypes[activeVoxI - 1 - vCountYZ + vCountZ] > 0) goto SkipIgnoreSpread;
+                        //-X-Z-Y
+                        if (vTypes[activeVoxI - 1 - vCountYZ - vCountZ] > 0) goto SkipIgnoreSpread;
+                        //if (vTypes[activeVoxI + 1] > 0) goto SkipIgnoreSpread;
+                        //if (vTypes[activeVoxI - 1] > 0) goto SkipIgnoreSpread;
+                        //if (vTypes[activeVoxI + vCountZ] > 0) goto SkipIgnoreSpread;
+                        //if (vTypes[activeVoxI - vCountZ] > 0) goto SkipIgnoreSpread;
+                        //if (vTypes[activeVoxI + vCountYZ] > 0) goto SkipIgnoreSpread;
+                        //if (vTypes[activeVoxI - vCountYZ] > 0) goto SkipIgnoreSpread;
+                        continue;
+
+                    SkipIgnoreSpread:;
+                        tempVoxA = activeVoxI + 1; if (vSearched.ContainsKey(tempVoxA) == false) { toSearchCount++; toSearchIndex.Add(tempVoxA); }
+                        tempVoxA = activeVoxI - 1; if (vSearched.ContainsKey(tempVoxA) == false) { toSearchCount++; toSearchIndex.Add(tempVoxA); }
+                        tempVoxA = activeVoxI + vCountZ; if (vSearched.ContainsKey(tempVoxA) == false) { toSearchCount++; toSearchIndex.Add(tempVoxA); }
+                        tempVoxA = activeVoxI - vCountZ; if (vSearched.ContainsKey(tempVoxA) == false) { toSearchCount++; toSearchIndex.Add(tempVoxA); }
+                        tempVoxA = activeVoxI + vCountYZ; if (vSearched.ContainsKey(tempVoxA) == false) { toSearchCount++; toSearchIndex.Add(tempVoxA); }
+                        tempVoxA = activeVoxI - vCountYZ; if (vSearched.ContainsKey(tempVoxA) == false) { toSearchCount++; toSearchIndex.Add(tempVoxA); }
+                    }
+
+                    return toSearchCount > -1;
+
+                    float DisToLine()
+                    {
+                        Vector3 pointToLineStart = tempPosC - tempPosA;
+
+                        // Calculate the projection of pointToLineStart onto the lineDirection
+                        float t = Vector3.Dot(pointToLineStart, tempDirA) / tempDirA.sqrMagnitude;
+
+                        // If t is less than 0, the closest point is linePoint1
+                        if (t < 0)
+                        {
+                            return (tempPosC - tempPosA).sqrMagnitude;
+                        }
+                        // If t is greater than 1, the closest point is linePoint2
+                        else if (t > 1)
+                        {
+                            return (tempPosC - tempPosB).sqrMagnitude;
+                        }
+                        // Otherwise, the closest point is along the line between linePoint1 and linePoint2
+                        else
+                        {
+                            Vector3 closestPoint = tempPosA + t * tempDirA;
+                            return (tempPosC - closestPoint).sqrMagnitude;
+                        }
+                    }
                 }
             }
         }

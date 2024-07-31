@@ -123,6 +123,37 @@ namespace zombVoxels
                 Debug.DrawLine(prevPos, nowPos, Color.red, 0.1f, true);
                 prevPos = nowPos;
             }
+
+            int voxOnPath;
+            byte activeDirI;
+            int vCountZ = globalHandler.voxWorld.vCountZ;
+            int vCountYZ = globalHandler.voxWorld.vCountYZ;
+
+            foreach (var vox in pathfinder.fp_job._voxsSearched)
+            {
+                voxOnPath = vox.Key;
+                activeDirI = vox.Value;
+                VoxHelpBurst.WVoxIndexToPos(ref voxOnPath, ref nowPos, ref globalHandler.voxWorld);
+
+                switch (activeDirI)
+                {
+                    case 1:
+                        voxOnPath--; break;
+                    case 2:
+                        voxOnPath++; break;
+                    case 3:
+                        voxOnPath -= vCountZ; break;
+                    case 4:
+                        voxOnPath += vCountZ; break;
+                    case 5:
+                        voxOnPath -= vCountYZ; break;
+                    case 6:
+                        voxOnPath += vCountYZ; break;
+                }
+
+                VoxHelpBurst.WVoxIndexToPos(ref voxOnPath, ref prevPos, ref globalHandler.voxWorld);
+                Debug.DrawLine(prevPos, nowPos, Color.yellow, 0.0f, true);
+            }
         }
 
         private void OnPathRequestDiscarded(int requestId)
