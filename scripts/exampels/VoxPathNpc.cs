@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
+using Unity.Collections.NotBurstCompatible;
 using UnityEngine;
 
 namespace zombVoxels
@@ -13,7 +14,19 @@ namespace zombVoxels
         [SerializeField] private bool discardPendingUpdatesOnRequest = true;
         [SerializeField] private VoxPathfinder.PathRequest pathProperties = new();
         [SerializeField] private VoxPathfinder pathfinder = null;
+        [SerializeField] private float pathSimplificationTolerance = 0.1f;
         private VoxGlobalHandler globalHandler;
+
+#if UNITY_EDITOR
+        [SerializeField] private DebugMode debugMode = DebugMode.None;
+
+        private enum DebugMode
+        {
+            None,
+            DrawPath,
+            DrawSearched
+        }
+#endif
 
         private void Awake()
         {
@@ -54,6 +67,10 @@ namespace zombVoxels
         private void Update()
         {
             if (startTarget == null || endTarget == null) return;
+
+#if UNITY_EDITOR
+            if (debugMode != DebugMode.None) DoPathDebug(false);
+#endif
 
             int resultV = 0;
             Vector3 pos = startTarget.position;
@@ -109,25 +126,59 @@ namespace zombVoxels
             pendingRequestIds.Clear();
         }
 
+        /// <summary>
+        /// The latest path found, end to start
+        /// </summary>
+        [System.NonSerialized] public List<Vector3> pathResult = new();
+
         private void OnPathRequestComplete(int requestId)
         {
             if (pendingRequestIds.Remove(requestId) == false) return;
 
-            //Debug log path
-            Vector3 prevPos = endTarget.position; 
-            Vector3 nowPos = Vector3.zero; 
-            foreach (int voxI in pathfinder.fp_job._resultPath)
+            //Extract path result
+            pathResult.Clear();
+            foreach (Vector3 pos in pathfinder.fp_job._resultPath)
             {
-                int voxII = voxI;
-                VoxHelpBurst.WVoxIndexToPos(ref voxII, ref nowPos, ref globalHandler.voxWorld);
-                Debug.DrawLine(prevPos, nowPos, Color.red, 0.1f, true);
-                prevPos = nowPos;
+                pathResult.Add(pos);
             }
+
+            if (pathSimplificationTolerance > 0.0f) LineUtility.Simplify(pathResult, pathSimplificationTolerance, pathResult);
+
+#if UNITY_EDITOR
+            if (debugMode != DebugMode.None) DoPathDebug(true);
+#endif
+        }
+
+        private void OnPathRequestDiscarded(int requestId)
+        {
+            if (pendingRequestIds.Remove(requestId) == false) return;
+
+        }
+
+        #endregion HandlePathRequesting
+
+#if UNITY_EDITOR
+        private void DoPathDebug(bool drawSearched = false)
+        {
+            //Debug draw path
+            if (debugMode == DebugMode.None) return;
+
+            Vector3 prevPos = endTarget.position;
+            foreach (var voxPos in pathResult)
+            {
+                Debug.DrawLine(prevPos, voxPos, Color.red, 0.0f, true);
+                prevPos = voxPos;
+            }
+
+            //Debug draw searced voxels
+            if (debugMode == DebugMode.DrawPath || drawSearched == false) return;
 
             int voxOnPath;
             byte activeDirI;
             int vCountZ = globalHandler.voxWorld.vCountZ;
             int vCountYZ = globalHandler.voxWorld.vCountYZ;
+            Vector3 nowPos = Vector3.zero;
+            float delta = Time.deltaTime * 2.0f;
 
             foreach (var vox in pathfinder.fp_job._voxsSearched)
             {
@@ -152,16 +203,9 @@ namespace zombVoxels
                 }
 
                 VoxHelpBurst.WVoxIndexToPos(ref voxOnPath, ref prevPos, ref globalHandler.voxWorld);
-                Debug.DrawLine(prevPos, nowPos, Color.yellow, 0.0f, true);
+                Debug.DrawLine(prevPos, nowPos, Color.yellow, delta, true);
             }
         }
-
-        private void OnPathRequestDiscarded(int requestId)
-        {
-            if (pendingRequestIds.Remove(requestId) == false) return;
-
-        }
-
-        #endregion HandlePathRequesting
+#endif
     }
 }

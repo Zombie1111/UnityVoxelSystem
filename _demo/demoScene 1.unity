@@ -406,7 +406,7 @@ Transform:
   m_GameObject: {fileID: 947038845}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -140.02, y: 179.86, z: -25.19}
+  m_LocalPosition: {x: -158.63, y: 176.82, z: -26.97}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -671,10 +671,12 @@ MonoBehaviour:
   endTarget: {fileID: 947038846}
   discardPendingUpdatesOnRequest: 1
   pathProperties:
-    radius: 6
+    radius: 3
     snapRadius: 10
     pathType: 1
   pathfinder: {fileID: 0}
+  pathSimplificationTolerance: 1
+  debugMode: 1
 --- !u!4 &1230958117
 Transform:
   m_ObjectHideFlags: 0
@@ -717,7 +719,7 @@ Transform:
   m_GameObject: {fileID: 1467356442}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -147.25, y: 178.8, z: -14.53}
+  m_LocalPosition: {x: -162.36, y: 179.85, z: -26.71}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -876,6 +878,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   worldScaleAxis: {x: 1, y: 0.5, z: 1}
+  drawEditorGizmo: 1
   transToColIds:
     dictionaryList:
     - Key: {fileID: 542478110}
@@ -917,9 +920,10 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   maxVoxelsToSearch: 1000
-  maxVoxelsSearched: 1000000
+  maxVoxelsSearched: 10000
   voxTypeCostMultiplier:
     dictionaryList: []
+  toll: 0.1
 --- !u!4 &2401749211043727931
 Transform:
   m_ObjectHideFlags: 0

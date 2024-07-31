@@ -107,8 +107,12 @@ namespace zombVoxels
 
         #region VoxelWorldManagement
 
-        [Header("Voxel Grid Scale")]
+        [Header("Configuration")]
         [SerializeField] private Vector3 worldScaleAxis = Vector3.one;
+        [SerializeField][Range(1, 10)] private int framesBetweenVoxelUpdate = 2;
+#if UNITY_EDITOR
+        [SerializeField] private bool drawEditorGizmo = true;
+#endif
 
         [Space()]
         [Header("Debug")]
@@ -383,14 +387,21 @@ namespace zombVoxels
         public event Event_OnGlobalReadAccessStart OnGlobalReadAccessStart;
         public delegate void Event_OnGlobalReadAccessStop();
         public event Event_OnGlobalReadAccessStop OnGlobalReadAccessStop;
-
-        private void Update()
-        {
-            ComputeVoxels_start();
-        }
+        private bool wannaUpdateVoxels = true;
+        private int framesSinceUpdatedVoxels = 69420;
 
         private void LateUpdate()
         {
+            if (wannaUpdateVoxels == true)
+            {
+                framesSinceUpdatedVoxels = 0;
+                wannaUpdateVoxels = false;
+                ComputeVoxels_start();
+                return;
+            }
+
+            framesSinceUpdatedVoxels++;
+            if (framesSinceUpdatedVoxels >= framesBetweenVoxelUpdate) wannaUpdateVoxels = true;
             ComputeVoxels_end(true);
         }
 
@@ -558,6 +569,27 @@ namespace zombVoxels
                 oldWorldScaleAxis = worldScaleAxis;
             }
 
+            if (voxEditorIsValid == false || drawEditorGizmo == false) return;
+
+            //Draw world voxel bounds
+            Vector3 size = new Vector3(voxWorld.vCountX, voxWorld.vCountY, voxWorld.vCountZ) * VoxGlobalSettings.voxelSizeWorld;
+            Gizmos.color = Color.yellow;
+            Gizmos.DrawWireCube(size * 0.5f, size + (Vector3.one * 0.1f));
+            Gizmos.color = Color.red;
+            Gizmos.DrawCube(size * 0.5f, size);
+
+            //Draw debug voxels
+            if (voxsToDraw.Count > 0 && Application.isPlaying == true)
+            {
+                Vector3 voxSize = Vector3.one * VoxGlobalSettings.voxelSizeWorld;
+
+                foreach (var draw in voxsToDraw)
+                {
+                    Gizmos.color = VoxGlobalSettings.diffColors64[draw.colorI];
+                    Gizmos.DrawCube(draw.pos, voxSize);
+                }
+            }
+
             //Debug stuff
             //if (Application.isPlaying == true)
             //{
@@ -596,30 +628,6 @@ namespace zombVoxels
         }
 
         private List<EditorVoxToDraw> voxsToDraw = new();
-
-        private void OnDrawGizmosSelected()
-        {
-            if (voxEditorIsValid == false) return;
-
-            //Draw world voxel bounds
-            Vector3 size = new Vector3(voxWorld.vCountX, voxWorld.vCountY, voxWorld.vCountZ) * VoxGlobalSettings.voxelSizeWorld;
-            Gizmos.color = Color.yellow;
-            Gizmos.DrawWireCube(size * 0.5f, size + (Vector3.one * 0.1f));
-            Gizmos.color = Color.red;
-            Gizmos.DrawCube(size * 0.5f, size);
-
-            //Draw debug voxels
-            if (voxsToDraw.Count > 0 && Application.isPlaying == true)
-            {
-                Vector3 voxSize = Vector3.one * VoxGlobalSettings.voxelSizeWorld;
-
-                foreach (var draw in voxsToDraw)
-                {
-                    Gizmos.color = VoxGlobalSettings.diffColors64[draw.colorI];
-                    Gizmos.DrawCube(draw.pos, voxSize);
-                }
-            }
-        }
 
         //debug stopwatch
         private System.Diagnostics.Stopwatch stopwatch = new();
