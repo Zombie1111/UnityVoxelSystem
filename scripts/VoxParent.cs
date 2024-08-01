@@ -6,8 +6,8 @@ using zombVoxels;
 public class VoxParent : MonoBehaviour
 {
     [Header("Voxel Settings")]
-    public bool buildOnStart = false;
-    public byte voxelType = 0;
+    public bool buildOnStart = true;
+    public byte voxelType = VoxGlobalSettings.solidStart + 1;
     public Collider voxelColliderOverwrite = null;
 
     [Space]
@@ -53,9 +53,13 @@ public class VoxParent : MonoBehaviour
 #endif
 
     private VoxGlobalHandler voxGlobal;
+    private bool hasBeenSetup = false;
 
-    private void Start()
+    private void OnEnable()
     {
+        //Setup voxeltrans
+        if (hasBeenSetup == true) goto SkipTransSetup;
+
         //If build on start, get colliders and build voxels
         if (buildOnStart == true)
         {
@@ -70,6 +74,25 @@ public class VoxParent : MonoBehaviour
         {
             voxGlobal.CreateVoxObjectFromCollider(vCol.col, vCol.colId, vCol.colType);
         }
+
+        hasBeenSetup = true;
+        return;//New voxTrans are always enabled by defualt
+
+        //Make sure voxTrans is enabled
+        SkipTransSetup:;
+        voxGlobal.SetVoxTransActiveStatus(transform, true);
+
+    }
+
+    private void OnDisable()
+    {
+        //Make sure voxTrans is disabled
+        voxGlobal.SetVoxTransActiveStatus(transform, false);
+    }
+
+    private void OnDestroy()
+    {
+        voxGlobal.SetVoxTransActiveStatus(transform, false);
     }
 
     /// <summary>

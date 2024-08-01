@@ -6,6 +6,7 @@ using Unity.Burst;
 using Unity.Collections;
 using Unity.Collections.LowLevel.Unsafe;
 using Unity.Jobs;
+using Unity.VisualScripting;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.Jobs;
@@ -34,7 +35,7 @@ namespace zombVoxels
         /// <summary>
         /// Creates a voxObject from the given collider and adds it to the collider transform
         /// </summary>
-        public void CreateVoxObjectFromCollider(Collider col, int colId, byte objVoxType = 1)
+        public void CreateVoxObjectFromCollider(Collider col, int colId, byte objVoxType = VoxGlobalSettings.solidStart + 1)
         {
             //Add colId to transform
             Transform trans = col.transform;
@@ -56,7 +57,11 @@ namespace zombVoxels
             }
 
             if (voxT.colIds.Contains(colId) == false) voxT.colIds.Add(colId);
-            else if (isNewT == false) return;
+            else if (isNewT == false)
+            {
+                SetVoxTransActiveStatus(trans, true);
+                return;
+            }
 
 #if UNITY_EDITOR
             if (Application.isPlaying == true)
@@ -87,6 +92,14 @@ namespace zombVoxels
             }
 
             savedVoxData.RemoveVoxObject(colId);
+        }
+
+        /// <summary>
+        /// Enable or disable a voxelTransform
+        /// </summary>
+        public void SetVoxTransActiveStatus(Transform trans, bool toActive)
+        {
+            transToSetVoxActiveStatus[trans] = toActive;
         }
 
         /// <summary>
@@ -290,10 +303,9 @@ namespace zombVoxels
                     {
                         var voxO = cvo_job.colIdToVoxObject[colId];
                         var lToWPrev = gtd_job.voxTranssLToWPrev[voxTrans.transIndex];
-                        var lToWNow = trans.localToWorldMatrix;
 
                         VoxHelpBurst.ApplyVoxObjectToWorldVox(ref voxWorld, ref cvo_job.voxsCount, ref cvo_job.voxsType, ref cvo_job.voxsTypeOld,
-                            ref voxO, ref lToWPrev, ref lToWNow, ref voxT, true);//We must unapply it before doing changing any data, should be fast enough to not cause a problem?
+                            ref voxO, ref lToWPrev, ref lToWPrev, ref voxT, true);//We must unapply it before doing changing any data, should be fast enough to not cause a problem?
                     }
 
                     transColIds[voxTrans.transIndex].Dispose();
@@ -301,7 +313,7 @@ namespace zombVoxels
 
                 //Update transform data
                 transColIds[voxTrans.transIndex] = colIds;
-                gtd_job.transOldLocValue[voxTrans.transIndex] = 0.0f;
+                gtd_job.transOldLocValue[voxTrans.transIndex] = 0.00002f;
 
                 voxT.colIds_ptr = NativeArrayUnsafeUtility.GetUnsafeReadOnlyPtr(colIds);
                 voxT.colIds_lenght = colIds.Length;
@@ -318,7 +330,8 @@ namespace zombVoxels
                 {
                     colIds_ptr = NativeArrayUnsafeUtility.GetUnsafeReadOnlyPtr(colIds),
                     colIds_lenght = colIds.Length,
-                    isAppliedToWorld = false
+                    isAppliedToWorld = false,
+                    isActive = true
                 });
             }
 
@@ -405,6 +418,8 @@ namespace zombVoxels
             ComputeVoxels_end(true);
         }
 
+        private Dictionary<Transform, bool> transToSetVoxActiveStatus = new();
+
         private void ComputeVoxels_start()
         {
             if (gtdCvo_jobIsActive == true || voxRuntimeIsValid == false) return;
@@ -434,6 +449,42 @@ namespace zombVoxels
             }
 
             newVoxelObj.Clear();
+
+            //Set transforms active status
+            foreach (var transToSet in transToSetVoxActiveStatus)
+            {
+                if (transToColIds.TryGetValue(transToSet.Key, out var voxTS) == false || voxTS.transIndex < 0) continue;
+                var voxT = cvo_job.voxTranss[voxTS.transIndex];
+
+                if (voxT.isActive == transToSet.Value) continue;
+
+                voxT.isActive = transToSet.Value;
+                if (voxT.isActive == true)
+                {
+                    gtd_job.transOldLocValue[voxTS.transIndex] = 0.0001f;
+                    voxelObjTranss[voxTS.transIndex] = transToSet.Key;
+                }
+                else
+                {
+                    gtd_job.transOldLocValue[voxTS.transIndex] = 0.0003f;
+                }
+
+                if (transToSet.Key == null)
+                {
+                    foreach (int colId in transColIds[voxTS.transIndex])
+                    {
+                        var voxO = cvo_job.colIdToVoxObject[colId];
+                        var lToWPrev = gtd_job.voxTranssLToWPrev[voxTS.transIndex];
+
+                        VoxHelpBurst.ApplyVoxObjectToWorldVox(ref voxWorld, ref cvo_job.voxsCount, ref cvo_job.voxsType, ref cvo_job.voxsTypeOld,
+                            ref voxO, ref lToWPrev, ref lToWPrev, ref voxT, true);//We must unapply manually since transJob dont get called on deleted trans
+                    }
+                }
+
+                cvo_job.voxTranss[voxTS.transIndex] = voxT;
+            }
+
+            transToSetVoxActiveStatus.Clear();
 
             //Run the job
             gtd_handle = gtd_job.Schedule(voxelObjTranss);
@@ -477,7 +528,7 @@ namespace zombVoxels
             {
                 //Get transform location value
                 float newLocValue = transform.worldToLocalMatrix.GetHashCode();
-
+                
                 if (newLocValue - transOldLocValue[index] != 0.0f)
                 {
                     //Transform has moved
@@ -558,6 +609,7 @@ namespace zombVoxels
 
 #if UNITY_EDITOR
         private Vector3 oldWorldScaleAxis = Vector3.zero;
+        [System.NonSerialized] public bool debugDoUpdateVisualVoxels = false;
         public Transform debugTrams;
         public Transform debugTramsB;
 
@@ -579,7 +631,13 @@ namespace zombVoxels
             Gizmos.DrawCube(size * 0.5f, size);
 
             //Draw debug voxels
-            if (voxsToDraw.Count > 0 && Application.isPlaying == true)
+            if (debugDoUpdateVisualVoxels == true && globalHasReadAccess == true)
+            {
+                //debugDoUpdateVisualVoxels = false;
+                Debug_updateVisualVoxels();
+            }
+
+            if (debugDoUpdateVisualVoxels == true && Application.isPlaying == true)
             {
                 Vector3 voxSize = Vector3.one * VoxGlobalSettings.voxelSizeWorld;
 
@@ -621,13 +679,7 @@ namespace zombVoxels
             //}
         }
 
-        private class EditorVoxToDraw
-        {
-            public Vector3 pos;
-            public byte colorI;
-        }
-
-        private List<EditorVoxToDraw> voxsToDraw = new();
+        private List<VoxHelpBurst.CustomVoxelData> voxsToDraw = new();
 
         //debug stopwatch
         private System.Diagnostics.Stopwatch stopwatch = new();
@@ -645,31 +697,29 @@ namespace zombVoxels
             }
         }
 
-        public void Debug_updateVisualVoxels()
+        private void Debug_updateVisualVoxels()
         {
             voxsToDraw.Clear();
             if (Application.isPlaying == false)
             {
-                Debug.LogError("Cannot draw voxels in editmode");
+                Debug.LogError("Cannot update visual voxels in editmode");
                 return;
             }
 
-            int vCount = voxWorld.vCountXYZ;
-            Vector3 voxPos = Vector3.zero;
-            byte vType;
+            float maxDis = VoxGlobalSettings.voxelSizeWorld * 50.0f;
+            var view = SceneView.currentDrawingSceneView;
+            if (view == null) return;
+            Vector3 sceneCam = view.camera.ViewportToWorldPoint(view.cameraViewport.center);
 
-            for (int vI = 0; vI < vCount; vI++)
+            NativeList<VoxHelpBurst.CustomVoxelData> solidVoxsI = new(1080, Allocator.Temp);
+            VoxHelpBurst.GetAllVoxelDataWithinRadius(ref sceneCam, maxDis, ref cvo_job.voxsType, ref voxWorld, ref solidVoxsI);
+
+            foreach (var vData in solidVoxsI)
             {
-                vType = cvo_job.voxsType[vI];
-                if (vType == 0) continue;
-
-                VoxHelpBurst.WVoxIndexToPos(ref vI, ref voxPos, ref voxWorld);
-                voxsToDraw.Add(new()
-                {
-                    pos = voxPos,
-                    colorI = (byte)Math.Clamp(vType / 4, 0, 63),
-                });
+                voxsToDraw.Add(vData);
             }
+
+            solidVoxsI.Dispose();
         }
 #endif
         #endregion Editor
@@ -697,9 +747,9 @@ namespace zombVoxels
             if (Application.isPlaying == false) EditorGUILayout.PropertyField(serializedObject.FindProperty("worldScaleAxis"), true);
             else
             {
-                if (GUILayout.Button("Update Visual Voxels") == true)
+                if (GUILayout.Button("Toggle Visual Voxels") == true)
                 {
-                    yourScript.Debug_updateVisualVoxels();
+                    yourScript.debugDoUpdateVisualVoxels = !yourScript.debugDoUpdateVisualVoxels;
                 }
 
                 EditorGUILayout.HelpBox("Properties cannot be edited at runtime", MessageType.Info);

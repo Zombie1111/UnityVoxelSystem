@@ -44,8 +44,8 @@ namespace zombVoxels
             if (pathfinder != null)
             {
                 if (pathfinder != newPathfinder) DiscardPendingUpdates(true);
-                pathfinder.OnPathRequestCompleted -= OnPathRequestComplete;
-                pathfinder.OnPathRequestCompleted -= OnPathRequestDiscarded;
+                pathfinder.OnPathRequestCompleted -= OnPathRequestCompleted;
+                pathfinder.OnPathRequestDiscarded -= OnPathRequestDiscarded;
             }
 
             if (newPathfinder == null)
@@ -55,8 +55,8 @@ namespace zombVoxels
             }
 
             pathfinder = newPathfinder;
-            pathfinder.OnPathRequestCompleted += OnPathRequestComplete;//Is it worth only being subscribed while we have a pending request?
-            pathfinder.OnPathRequestCompleted += OnPathRequestDiscarded;
+            pathfinder.OnPathRequestCompleted += OnPathRequestCompleted;//Is it worth only being subscribed while we have a pending request?
+            pathfinder.OnPathRequestDiscarded += OnPathRequestDiscarded;
         }
 
         private void OnDestroy()
@@ -131,7 +131,7 @@ namespace zombVoxels
         /// </summary>
         [System.NonSerialized] public List<Vector3> pathResult = new();
 
-        private void OnPathRequestComplete(int requestId)
+        private void OnPathRequestCompleted(int requestId)
         {
             if (pendingRequestIds.Remove(requestId) == false) return;
 

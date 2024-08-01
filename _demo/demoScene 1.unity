@@ -406,7 +406,7 @@ Transform:
   m_GameObject: {fileID: 947038845}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -158.63, y: 176.82, z: -26.97}
+  m_LocalPosition: {x: -158.63, y: 168.89, z: -16.66}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -441,7 +441,7 @@ Transform:
   m_GameObject: {fileID: 1054153327}
   serializedVersion: 2
   m_LocalRotation: {x: -0.7068768, y: -0.018036341, z: -0.01803634, w: 0.7068767}
-  m_LocalPosition: {x: 58.19, y: 23.74, z: 16.59}
+  m_LocalPosition: {x: 58.19, y: 21.16, z: 16.59}
   m_LocalScale: {x: 300, y: 300, z: 300}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -676,7 +676,7 @@ MonoBehaviour:
     pathType: 1
   pathfinder: {fileID: 0}
   pathSimplificationTolerance: 1
-  debugMode: 1
+  debugMode: 2
 --- !u!4 &1230958117
 Transform:
   m_ObjectHideFlags: 0
@@ -719,7 +719,7 @@ Transform:
   m_GameObject: {fileID: 1467356442}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -162.36, y: 179.85, z: -26.71}
+  m_LocalPosition: {x: -155.21, y: 168.46, z: -27.46}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -878,12 +878,13 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   worldScaleAxis: {x: 1, y: 0.5, z: 1}
+  framesBetweenVoxelUpdate: 2
   drawEditorGizmo: 1
   transToColIds:
     dictionaryList:
     - Key: {fileID: 542478110}
       Value:
-        colIds: 1741a36d
+        colIds: 9770dd6d
         transIndex: -1
       index: 0
       isKeyDuplicated: 0
@@ -901,7 +902,7 @@ MonoBehaviour:
       isKeyDuplicated: 0
     - Key: {fileID: 1468806177}
       Value:
-        colIds: a2285da8
+        colIds: 225897a8
         transIndex: -1
       index: 3
       isKeyDuplicated: 0
@@ -922,7 +923,11 @@ MonoBehaviour:
   maxVoxelsToSearch: 1000
   maxVoxelsSearched: 10000
   voxTypeCostMultiplier:
-    dictionaryList: []
+    dictionaryList:
+    - Key: 8
+      Value: 10
+      index: 0
+      isKeyDuplicated: 0
   toll: 0.1
 --- !u!4 &2401749211043727931
 Transform:

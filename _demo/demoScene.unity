@@ -456,20 +456,10 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   worldScaleAxis: {x: 1, y: 0.5, z: 1}
+  framesBetweenVoxelUpdate: 2
+  drawEditorGizmo: 1
   transToColIds:
-    dictionaryList:
-    - Key: {fileID: 542478110}
-      Value:
-        colIds: 1741a36d
-        transIndex: -1
-      index: 0
-      isKeyDuplicated: 0
-    - Key: {fileID: 2401749211043727931}
-      Value:
-        colIds: 259b2e0c
-        transIndex: -1
-      index: 1
-      isKeyDuplicated: 0
+    dictionaryList: []
   debugTrams: {fileID: 0}
   debugTramsB: {fileID: 0}
 --- !u!4 &2401749211043727931
@@ -602,10 +592,7 @@ MonoBehaviour:
   ignoreChildren: 0
   affectSelf: 1
   affectChildren: 1
-  voxCols:
-  - col: {fileID: 8234654202685583752}
-    colId: 204380965
-    colType: 8
+  voxCols: []
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

@@ -88,12 +88,13 @@ namespace zombVoxels
             }
             else voxTrans.isAppliedToWorld = true;
 
-            if (unapplyOnly == true)
+            if (voxTrans.isActive == false || unapplyOnly == true)
             {
                 voxTrans.isAppliedToWorld = false;
                 return;
             }
 
+            //Note: objLToWNow is not garanteed to be valid if unapplyOnly is true or trans is inactive
             //Convert local voxel grid to now worldSpace
             minW = objLToWNow.MultiplyPoint3x4(voxObject.minL);
             xDirW = objLToWNow.MultiplyVector(voxObject.xDirL) * VoxGlobalSettings.voxelSizeWorld;
@@ -137,11 +138,64 @@ namespace zombVoxels
         [BurstCompile]
         public static void GetVoxelCountBetweenWVoxIndexs(int voxA, int voxB, ref ushort resultCount, ref VoxWorld voxWorld)
         {
-            resultCount = (ushort)math.abs((voxA % voxWorld.vCountZ) - (voxB % voxWorld.vCountZ));
-            voxA /= voxWorld.vCountZ;
-            voxB /= voxWorld.vCountZ;
-            resultCount += (ushort)(math.abs((voxA % voxWorld.vCountY) - (voxB % voxWorld.vCountY))
-                + math.abs((voxA / voxWorld.vCountY) - (voxB / voxWorld.vCountY)));
+            //resultCount = (ushort)math.abs((voxA % voxWorld.vCountZ) - (voxB % voxWorld.vCountZ));
+            //voxA /= voxWorld.vCountZ;
+            //voxB /= voxWorld.vCountZ;
+            //resultCount += (ushort)(math.abs((voxA % voxWorld.vCountY) - (voxB % voxWorld.vCountY))
+            //    + math.abs((voxA / voxWorld.vCountY) - (voxB / voxWorld.vCountY)));
+
+            //Get Manhattan distance
+            int tempReminderA = voxA % (voxWorld.vCountY * voxWorld.vCountZ);
+            int tempReminderB = voxB % (voxWorld.vCountY * voxWorld.vCountZ);
+
+            resultCount = (ushort)(
+                math.abs((voxA / (voxWorld.vCountY * voxWorld.vCountZ)) - (voxB / (voxWorld.vCountY * voxWorld.vCountZ)))
+                + math.abs((tempReminderA / voxWorld.vCountZ) - (tempReminderB / voxWorld.vCountZ))
+                + math.abs((tempReminderA % voxWorld.vCountZ) - (tempReminderB % voxWorld.vCountZ))
+                );
+        }
+
+        [BurstCompile]
+        public static void GetAllSolidVoxels(ref NativeArray<byte> voxTypes, ref VoxWorld vWorld, ref NativeList<int> result)
+        {
+            int vCount = vWorld.vCountXYZ;
+            for (int i = 0; i < vCount; i++)
+            {
+                if (voxTypes[i] <= VoxGlobalSettings.solidStart) continue;
+
+                result.Add(i);
+            }
+        }
+
+        public struct CustomVoxelData
+        {
+            public Vector3 pos;
+            public byte colorI;
+        }
+
+        [BurstCompile]
+        public static void GetAllVoxelDataWithinRadius(ref Vector3 center, float radius, ref NativeArray<byte> voxTypes, ref VoxWorld vWorld, ref NativeList<CustomVoxelData> result)
+        {
+            int vCount = vWorld.vCountXYZ;
+            int vType;
+            float radiusSqr = radius * radius;
+            Vector3 vPos;
+
+            for (int i = 0; i < vCount; i++)
+            {
+                vType = voxTypes[i];
+                if (vType == 0) continue;
+
+                int remainderAfterZ = i % vWorld.vCountYZ;
+                vPos = new Vector3(i / vWorld.vCountYZ, remainderAfterZ / vWorld.vCountZ, remainderAfterZ % vWorld.vCountZ) * VoxGlobalSettings.voxelSizeWorld;
+                
+                if ((vPos - center).sqrMagnitude > radiusSqr) continue;
+                result.Add(new()
+                {
+                    pos = vPos,
+                    colorI = (byte)Math.Clamp(vType / 4, 0, 63)
+                });
+            }
         }
     }
 
@@ -175,7 +229,7 @@ namespace zombVoxels
         /// <summary>
         /// Voxelizes the given collider, returns voxel positions in collider transform localSpace. The voxels has the size defined in voxGlobalSettings.cs
         /// </summary>
-        public static VoxObject.VoxObjectSaveable VoxelizeCollider(Collider col, byte colVoxType = 1)
+        public static VoxObject.VoxObjectSaveable VoxelizeCollider(Collider col, byte colVoxType = VoxGlobalSettings.solidStart + 1)
         {
             Vector3 voxelSize = VoxGlobalSettings.voxelSizeWorld * Vector3.one;
             Bounds colBounds = col.bounds;

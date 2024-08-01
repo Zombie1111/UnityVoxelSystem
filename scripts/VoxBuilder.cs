@@ -181,7 +181,7 @@ namespace zombVoxels
                 }
 
                 //Get collider id
-                byte voxType = usedParent == true ? voxParent.voxelType : (byte)1;
+                byte voxType = usedParent == true ? voxParent.voxelType : (byte)(VoxGlobalSettings.solidStart + 1);
                 int colId = col.GetColId(voxType);
 
                 //Notify voxParent that it has this collider

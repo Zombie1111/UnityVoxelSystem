@@ -58,6 +58,7 @@ namespace zombVoxels
         public void* colIds_ptr;
         public int colIds_lenght;
         [MarshalAs(UnmanagedType.U1)] public bool isAppliedToWorld;
+        [MarshalAs(UnmanagedType.U1)] public bool isActive;
 
         [System.Serializable]
         public class VoxTransformSavable
