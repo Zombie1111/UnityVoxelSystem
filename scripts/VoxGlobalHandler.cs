@@ -35,7 +35,7 @@ namespace zombVoxels
         /// <summary>
         /// Creates a voxObject from the given collider and adds it to the collider transform
         /// </summary>
-        public void CreateVoxObjectFromCollider(Collider col, int colId, byte objVoxType = VoxGlobalSettings.solidStart + 1)
+        public void CreateVoxObjectFromCollider(Collider col, int colId, byte objVoxType = VoxGlobalSettings.defualtType)
         {
             //Add colId to transform
             Transform trans = col.transform;

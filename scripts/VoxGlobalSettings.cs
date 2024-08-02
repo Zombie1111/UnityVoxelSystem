@@ -10,8 +10,11 @@ namespace zombVoxels
         //How many voxels there are in each axis before its scaled. Total voxel count is rougly voxelAxisCount*voxelAxisCount*voxelAxisCount
         public const int voxelAxisCount = 200;
 
-        //All voxels that has a type higher than this counts as solid (Possible voxel types are 1-255 (0 is air))
-        public const byte solidStart = 128;
+        //All voxels that has a type higher than this counts as solid (Possible voxel types are 1-255 (0 is empty))
+        public const byte solidTypeStart = 128;
+
+        //The voxel type a voxelObject is if no other type is specified, like by voxParent
+        public const byte defualtType = 200;
 
         //64 different colors used for debugging (Chatgpt generated it, looks fine)
         public static readonly Color[] diffColors64 = new Color[64]

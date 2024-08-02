@@ -7,7 +7,7 @@ public class VoxParent : MonoBehaviour
 {
     [Header("Voxel Settings")]
     public bool buildOnStart = true;
-    public byte voxelType = VoxGlobalSettings.solidStart + 1;
+    public byte voxelType = VoxGlobalSettings.defualtType;
     public Collider voxelColliderOverwrite = null;
 
     [Space]

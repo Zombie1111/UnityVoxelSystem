@@ -441,7 +441,7 @@ Transform:
   m_GameObject: {fileID: 1054153327}
   serializedVersion: 2
   m_LocalRotation: {x: -0.7068768, y: -0.018036341, z: -0.01803634, w: 0.7068767}
-  m_LocalPosition: {x: 58.19, y: 21.16, z: 16.59}
+  m_LocalPosition: {x: 58.19, y: 16.35, z: 16.59}
   m_LocalScale: {x: 300, y: 300, z: 300}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -676,7 +676,7 @@ MonoBehaviour:
     pathType: 1
   pathfinder: {fileID: 0}
   pathSimplificationTolerance: 1
-  debugMode: 2
+  debugMode: 1
 --- !u!4 &1230958117
 Transform:
   m_ObjectHideFlags: 0
@@ -884,7 +884,7 @@ MonoBehaviour:
     dictionaryList:
     - Key: {fileID: 542478110}
       Value:
-        colIds: 9770dd6d
+        colIds: f0b6fd6d
         transIndex: -1
       index: 0
       isKeyDuplicated: 0
@@ -902,7 +902,7 @@ MonoBehaviour:
       isKeyDuplicated: 0
     - Key: {fileID: 1468806177}
       Value:
-        colIds: 225897a8
+        colIds: 7b9eb7a8
         transIndex: -1
       index: 3
       isKeyDuplicated: 0

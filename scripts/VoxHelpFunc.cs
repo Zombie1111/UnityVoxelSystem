@@ -70,16 +70,22 @@ namespace zombVoxels
                         + ((int)(voxPos.x / VoxGlobalSettings.voxelSizeWorld) * vwCountZY);
 
                     voxsCount[wvIndex]--;
+                    if (voxsCount[wvIndex] == 0)
+                    {
+                        voxsType[wvIndex] = 0;
+                        voxsTypeOld[wvIndex] = 0;
+                        continue;
+                    }
 
                     vType = voxsType[wvIndex];
                     vTypeO = voxsTypeOld[wvIndex];
                     if (thisType == vTypeO)
                     {
-                        vTypeO = 0;
-                        voxsTypeOld[wvIndex] = 0;
+                        if (vType < vTypeO || voxsCount[wvIndex] == 1) voxsTypeOld[wvIndex] = vType;
+                        continue;
                     }
 
-                    if (thisType == vType && (vTypeO > 0 || voxsCount[wvIndex] == 0))
+                    if (thisType == vType && vTypeO > 0)
                     {
                         vType = vTypeO;
                         voxsType[wvIndex] = vTypeO;
@@ -112,10 +118,12 @@ namespace zombVoxels
                     + ((int)(voxPos.x / VoxGlobalSettings.voxelSizeWorld) * vwCountZY);
 
                 voxsCount[wvIndex]++;
-                if (voxsType[wvIndex] < thisType) voxsType[wvIndex] = thisType;
+                vType = voxsType[wvIndex];
+                if (vType < thisType) voxsType[wvIndex] = thisType;
+                if (voxsCount[wvIndex] == 1) continue;
 
-                vType = voxsTypeOld[wvIndex];
-                if (vType == 0 || vType > thisType) voxsTypeOld[wvIndex] = thisType;
+                vTypeO = voxsTypeOld[wvIndex];
+                if (vTypeO == 0 || vTypeO > thisType) voxsTypeOld[wvIndex] = vType > thisType ? thisType : vType;
             }
         }
 
@@ -161,7 +169,7 @@ namespace zombVoxels
             int vCount = vWorld.vCountXYZ;
             for (int i = 0; i < vCount; i++)
             {
-                if (voxTypes[i] <= VoxGlobalSettings.solidStart) continue;
+                if (voxTypes[i] <= VoxGlobalSettings.solidTypeStart) continue;
 
                 result.Add(i);
             }
@@ -229,7 +237,7 @@ namespace zombVoxels
         /// <summary>
         /// Voxelizes the given collider, returns voxel positions in collider transform localSpace. The voxels has the size defined in voxGlobalSettings.cs
         /// </summary>
-        public static VoxObject.VoxObjectSaveable VoxelizeCollider(Collider col, byte colVoxType = VoxGlobalSettings.solidStart + 1)
+        public static VoxObject.VoxObjectSaveable VoxelizeCollider(Collider col, byte colVoxType = VoxGlobalSettings.defualtType)
         {
             Vector3 voxelSize = VoxGlobalSettings.voxelSizeWorld * Vector3.one;
             Bounds colBounds = col.bounds;
