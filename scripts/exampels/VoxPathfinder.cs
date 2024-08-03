@@ -234,13 +234,14 @@ namespace zombVoxels
                 var voxTypeToMultiply = _voxTypeToMultiply;
                 var maxVoxelsSearched = _maxVoxelsSearched.Value;
                 int snapRadius = request.snapRadius;
+                int snapRadiusExtended = snapRadius * 3;
 
                 int vCountY = vWorld.vCountY;
                 int vCountZ = vWorld.vCountZ;
                 int vCountYZ = vWorld.vCountYZ;
                 byte aiSize = request.radius;
                 int aiSizeExtented = aiSize - 1;
-                float voxSizeSqr = VoxGlobalSettings.voxelSizeWorld * VoxGlobalSettings.voxelSizeWorld * (aiSize / 2.0f);
+                float tempCostMultiplier = 1.0f;
 
                 //Reset arrays
                 toSearchValue.Clear();
@@ -278,11 +279,11 @@ namespace zombVoxels
                     closestVoxI = 0;
 
 #pragma warning disable CS0162
-                    switch (request.pathType)
+                    switch (request.pathType)//Mode diff here
                     {
                         case PathType.climbing: startVoxI = SnapToValidVoxelClimbing(startVoxI); break;
-                        case PathType.walk: throw new NotImplementedException(); break;
-                        case PathType.flying: throw new NotImplementedException(); break;
+                        case PathType.walk: startVoxI = SnapToValidVoxelWalking(startVoxI); break;
+                        case PathType.flying: startVoxI = SnapToValidVoxelFlying(startVoxI); break;
                     }
 
                     toSearchCount = -1;
@@ -291,11 +292,11 @@ namespace zombVoxels
                     toSearchValue.Clear();
                     toSearchIndex.Clear();
 
-                    switch (request.pathType)
+                    switch (request.pathType)//Mode diff here
                     {
                         case PathType.climbing: endVoxI = SnapToValidVoxelClimbing(endVoxI); break;
-                        case PathType.walk: throw new NotImplementedException(); break;
-                        case PathType.flying: throw new NotImplementedException(); break;
+                        case PathType.walk: endVoxI = SnapToValidVoxelWalking(endVoxI); break;
+                        case PathType.flying: endVoxI = SnapToValidVoxelFlying(endVoxI); break;
                     }
 #pragma warning restore CS0162
 
@@ -321,11 +322,11 @@ namespace zombVoxels
 
                 //Do pathfinding
 #pragma warning disable CS0162
-                switch (request.pathType)
+                switch (request.pathType)//Mode diff here
                 {
                     case PathType.climbing: DoPathfindClimbing(); break;
-                    case PathType.walk: throw new NotImplementedException(); break;
-                    case PathType.flying: throw new NotImplementedException(); break;
+                    case PathType.walk: DoPathfindWalking(); break;
+                    case PathType.flying: DoPathfindFlying(); break;
                 }
 #pragma warning restore CS0162
 
@@ -367,6 +368,97 @@ namespace zombVoxels
                             voxOnPath += vCountYZ; break;
                     }
                 }
+
+                void AddVoxelToPath()
+                {
+                    //Get manhattan distance between tempVoxI and endVoxI
+                    tempReminderA = activeVoxI % (vCountY * vCountZ);
+                    tempReminderB = endVoxI % (vCountY * vCountZ);
+
+                    tempVValue = (ushort)(
+                        math.abs((activeVoxI / (vCountY * vCountZ)) - (endVoxI / (vCountY * vCountZ)))
+                        + math.abs((tempReminderA / vCountZ) - (tempReminderB / vCountZ))
+                        + math.abs((tempReminderA % vCountZ) - (tempReminderB % vCountZ))
+                        );
+
+                    //tempVoxA = math.abs((activeVoxI / (vCountY * vCountZ)) - (endVoxI / (vCountY * vCountZ)));
+                    //tempVoxB = math.abs((tempDeltaX / vCountZ) - (tempDeltaY / vCountZ));
+                    //tempDeltaZ = math.abs((tempDeltaX % vCountZ) - (tempDeltaY % vCountZ));
+                    //tempVValue = (ushort)(Math.Sqrt((tempVoxA * tempVoxA) + (tempVoxB * tempVoxB) + (tempDeltaZ * tempDeltaZ)) * 10);
+
+                    //tempVValue = (ushort)(
+                    //    math.abs((activeVoxI % vCountZ) - (endVoxI % vCountZ))
+                    //    + math.abs((activeVoxI % vCountY) - (endVoxI % vCountY))
+                    //    + math.abs((activeVoxI / (vCountY * vCountZ)) - (endVoxI / (vCountY * vCountZ)))
+                    //    );
+
+                    //tempVValue = (ushort)(
+                    //    math.abs((activeVoxI % vCountZ) - (endVoxI % vCountZ))
+                    //    + math.abs((activeVoxI % vCountY) - (endVoxI % vCountY))
+                    //    + math.abs((activeVoxI / vCountY) - (endVoxI / vCountY))
+                    //    );
+
+                    //tempDeltaX = math.abs((activeVoxI % vCountZ) - (endVoxI % vCountZ));
+                    //tempDeltaY = math.abs((activeVoxI % vCountY) - (endVoxI % vCountY));
+                    //tempDeltaZ = math.abs((activeVoxI / vCountY) - (endVoxI / vCountY));
+                    //tempVValue = (ushort)(Math.Sqrt((tempDeltaX * tempDeltaX) + (tempDeltaY * tempDeltaY) + (tempDeltaZ * tempDeltaZ)) * 100);
+
+                    if (tempCostMultiplier != 1.0f) tempVValue = (ushort)math.round(tempVValue * tempCostMultiplier);
+                    if (voxTypeToMultiply.TryGetValue(activeType, out float tempMultiply) == true) tempVValue = (ushort)math.round(tempVValue * tempMultiply);
+
+                    tempDidAdd = false;
+                    //Get where to insert it
+                    if (toSearchCount > -1)
+                    {
+                        for (tempLoop = toSearchCount; tempLoop > -1; tempLoop--)
+                        {
+                            if (tempVValue >= toSearchValue[tempLoop]) continue;
+
+                            if (tempLoop >= toSearchCount)
+                            {
+                                tempDidAdd = true;
+                                toSearchValue.Add(tempVValue);
+                                toSearchIndex.Add(activeVoxI);
+                                toSearchCount++;
+                                break;
+                            }
+
+                            tempDidAdd = true;
+                            toSearchValue.InsertRangeWithBeginEnd(tempLoop + 1, tempLoop + 2);
+                            toSearchValue[tempLoop + 1] = tempVValue;
+                            toSearchIndex.InsertRangeWithBeginEnd(tempLoop + 1, tempLoop + 2);
+                            toSearchIndex[tempLoop + 1] = activeVoxI;
+                            toSearchCount++;
+                            break;
+                        }
+                    }
+                    else
+                    {
+                        tempDidAdd = true;
+                        toSearchValue.Add(tempVValue);
+                        toSearchIndex.Add(activeVoxI);
+                        toSearchCount++;
+                    }
+
+                    if (tempDidAdd == false)
+                    {
+                        //Dont quite understand how didAdd is false sometimes
+                        toSearchValue.InsertRangeWithBeginEnd(0, 1);
+                        toSearchValue[0] = tempVValue;
+                        toSearchIndex.InsertRangeWithBeginEnd(0, 1);
+                        toSearchIndex[0] = activeVoxI;
+                        toSearchCount++;
+                    }
+
+                    if (closestVoxV >= tempVValue && closestVoxI != endVoxI)
+                    {
+                        //When found new valid voxel closer to end
+                        closestVoxI = activeVoxI;
+                        closestVoxV = tempVValue;
+                    }
+                }
+
+                #region ModeClimbing
 
                 void DoPathfindClimbing()
                 {
@@ -516,94 +608,6 @@ namespace zombVoxels
                 //activeVoxI - ((1 - vCountYZ + vCountZ) * tempLoop)
                 //activeVoxI - ((1 - vCountYZ - vCountZ) * tempLoop)
 
-                void AddVoxelToPath()
-                {
-                    //Get manhattan distance between tempVoxI and endVoxI
-                    tempReminderA = activeVoxI % (vCountY * vCountZ);
-                    tempReminderB = endVoxI % (vCountY * vCountZ);
-
-                    tempVValue = (ushort)(
-                        math.abs((activeVoxI / (vCountY * vCountZ)) - (endVoxI / (vCountY * vCountZ)))
-                        + math.abs((tempReminderA / vCountZ) - (tempReminderB / vCountZ))
-                        + math.abs((tempReminderA % vCountZ) - (tempReminderB % vCountZ))
-                        );
-
-                    //tempVoxA = math.abs((activeVoxI / (vCountY * vCountZ)) - (endVoxI / (vCountY * vCountZ)));
-                    //tempVoxB = math.abs((tempDeltaX / vCountZ) - (tempDeltaY / vCountZ));
-                    //tempDeltaZ = math.abs((tempDeltaX % vCountZ) - (tempDeltaY % vCountZ));
-                    //tempVValue = (ushort)(Math.Sqrt((tempVoxA * tempVoxA) + (tempVoxB * tempVoxB) + (tempDeltaZ * tempDeltaZ)) * 10);
-
-                    //tempVValue = (ushort)(
-                    //    math.abs((activeVoxI % vCountZ) - (endVoxI % vCountZ))
-                    //    + math.abs((activeVoxI % vCountY) - (endVoxI % vCountY))
-                    //    + math.abs((activeVoxI / (vCountY * vCountZ)) - (endVoxI / (vCountY * vCountZ)))
-                    //    );
-
-                    //tempVValue = (ushort)(
-                    //    math.abs((activeVoxI % vCountZ) - (endVoxI % vCountZ))
-                    //    + math.abs((activeVoxI % vCountY) - (endVoxI % vCountY))
-                    //    + math.abs((activeVoxI / vCountY) - (endVoxI / vCountY))
-                    //    );
-
-                    //tempDeltaX = math.abs((activeVoxI % vCountZ) - (endVoxI % vCountZ));
-                    //tempDeltaY = math.abs((activeVoxI % vCountY) - (endVoxI % vCountY));
-                    //tempDeltaZ = math.abs((activeVoxI / vCountY) - (endVoxI / vCountY));
-                    //tempVValue = (ushort)(Math.Sqrt((tempDeltaX * tempDeltaX) + (tempDeltaY * tempDeltaY) + (tempDeltaZ * tempDeltaZ)) * 100);
-
-                    if (voxTypeToMultiply.TryGetValue(activeType, out float tempMultiply) == true) tempVValue = (ushort)math.round(tempVValue * tempMultiply);
-   
-                    tempDidAdd = false;
-                    //Get where to insert it
-                    if (toSearchCount > -1)
-                    {
-                        for (tempLoop = toSearchCount; tempLoop > -1; tempLoop--)
-                        {
-                            if (tempVValue >= toSearchValue[tempLoop]) continue;
-
-                            if (tempLoop >= toSearchCount)
-                            {
-                                tempDidAdd = true;
-                                toSearchValue.Add(tempVValue);
-                                toSearchIndex.Add(activeVoxI);
-                                toSearchCount++;
-                                break;
-                            }
-
-                            tempDidAdd = true;
-                            toSearchValue.InsertRangeWithBeginEnd(tempLoop + 1, tempLoop + 2);
-                            toSearchValue[tempLoop + 1] = tempVValue;
-                            toSearchIndex.InsertRangeWithBeginEnd(tempLoop + 1, tempLoop + 2);
-                            toSearchIndex[tempLoop + 1] = activeVoxI;
-                            toSearchCount++;
-                            break;
-                        }
-                    }
-                    else
-                    {
-                        tempDidAdd = true;
-                        toSearchValue.Add(tempVValue);
-                        toSearchIndex.Add(activeVoxI);
-                        toSearchCount++;
-                    }
-
-                    if (tempDidAdd == false)
-                    {
-                        //Dont quite understand how didAdd is false sometimes
-                        toSearchValue.InsertRangeWithBeginEnd(0, 1);
-                        toSearchValue[0] = tempVValue;
-                        toSearchIndex.InsertRangeWithBeginEnd(0, 1);
-                        toSearchIndex[0] = activeVoxI;
-                        toSearchCount++;
-                    }
-
-                    if (closestVoxV >= tempVValue && closestVoxI != endVoxI)
-                    {
-                        //When found new valid voxel closer to end
-                        closestVoxI = activeVoxI;
-                        closestVoxV = tempVValue;
-                    }
-                }
-
                 int SnapToValidVoxelClimbing(int snapThis)
                 {
                     activeVoxI = snapThis; CheckVoxIndexClimbing(); if (toSearchCount > -1) return activeVoxI;
@@ -622,6 +626,289 @@ namespace zombVoxels
 
                     return snapThis;
                 }
+
+                #endregion ModeClimbing
+
+                #region ModeFlying
+
+                void DoPathfindFlying()
+                {
+                    while (toSearchCount > -1)
+                    {
+                        totalVoxelsSearched++;
+                        if (totalVoxelsSearched > maxVoxelsSearched || closestVoxI == endVoxI) break;
+
+                        //Get voxel index to search
+                        tempI = toSearchIndex[toSearchCount];
+                        toSearchIndex.RemoveAt(toSearchCount);
+                        toSearchValue.RemoveAt(toSearchCount);
+                        toSearchCount--;
+
+                        activeVoxI = tempI + 1;
+                        activeDirI = 1;
+                        CheckVoxIndexFlying();
+
+                        activeVoxI = tempI - 1;
+                        activeDirI = 2;
+                        CheckVoxIndexFlying();
+
+                        activeVoxI = tempI + vCountZ;
+                        activeDirI = 3;
+                        CheckVoxIndexFlying();
+
+                        activeVoxI = tempI - vCountZ;
+                        activeDirI = 4;
+                        CheckVoxIndexFlying();
+
+                        activeVoxI = tempI + vCountYZ;
+                        activeDirI = 5;
+                        CheckVoxIndexFlying();
+
+                        activeVoxI = tempI - vCountYZ;
+                        activeDirI = 6;
+                        CheckVoxIndexFlying();
+                    }
+                }
+
+                void CheckVoxIndexFlying()
+                {
+                    if (vSearched.TryAdd(activeVoxI, activeDirI) == false) return;
+
+                    //Check if voxel is overlapping
+                    if (vTypes[activeVoxI] > VoxGlobalSettings.solidTypeStart) return;
+
+                    activeType = 0;
+                    for (tempLoop = 1; tempLoop < aiSize; tempLoop++)
+                    {
+                        if (vTypes[activeVoxI + tempLoop] > VoxGlobalSettings.solidTypeStart) { activeType = 1; break; }
+                        if (vTypes[activeVoxI - tempLoop] > VoxGlobalSettings.solidTypeStart) { activeType = 1; break; }
+                        if (vTypes[activeVoxI + (vCountZ * tempLoop)] > VoxGlobalSettings.solidTypeStart) { activeType = 1; break; }
+                        if (vTypes[activeVoxI - (vCountZ * tempLoop)] > VoxGlobalSettings.solidTypeStart) { activeType = 1; break; }
+                        if (vTypes[activeVoxI + (vCountYZ * tempLoop)] > VoxGlobalSettings.solidTypeStart) { activeType = 1; break; }
+                        if (vTypes[activeVoxI - (vCountYZ * tempLoop)] > VoxGlobalSettings.solidTypeStart) { activeType = 1; break; }
+
+                        //+X+Z-Y
+                        if (vTypes[activeVoxI + ((1 + vCountYZ - vCountZ) * tempLoop)] > VoxGlobalSettings.solidTypeStart) { activeType = 1; break; }
+
+                        //+X+Z+Y
+                        if (vTypes[activeVoxI + ((1 + vCountYZ + vCountZ) * tempLoop)] > VoxGlobalSettings.solidTypeStart) { activeType = 1; break; }
+
+                        //+X-Z+Y
+                        if (vTypes[activeVoxI + ((1 - vCountYZ + vCountZ) * tempLoop)] > VoxGlobalSettings.solidTypeStart) { activeType = 1; break; }
+
+                        //+X-Z-Y
+                        if (vTypes[activeVoxI + ((1 - vCountYZ - vCountZ) * tempLoop)] > VoxGlobalSettings.solidTypeStart) { activeType = 1; break; }
+
+                        //-X+Z-Y
+                        if (vTypes[activeVoxI - ((1 + vCountYZ - vCountZ) * tempLoop)] > VoxGlobalSettings.solidTypeStart) { activeType = 1; break; }
+
+                        //-X+Z+Y
+                        if (vTypes[activeVoxI - ((1 + vCountYZ + vCountZ) * tempLoop)] > VoxGlobalSettings.solidTypeStart) { activeType = 1; break; }
+
+                        //-X-Z+Y
+                        if (vTypes[activeVoxI - ((1 - vCountYZ + vCountZ) * tempLoop)] > VoxGlobalSettings.solidTypeStart) { activeType = 1; break; }
+
+                        //-X-Z-Y
+                        if (vTypes[activeVoxI - ((1 - vCountYZ - vCountZ) * tempLoop)] > VoxGlobalSettings.solidTypeStart) { activeType = 1; break; }
+                    }
+
+                    if (activeType > 0) return;
+
+                    //Voxel is valid, add it to the path
+                    activeType = vTypes[activeVoxI];
+
+                    AddVoxelToPath();
+                }
+
+                int SnapToValidVoxelFlying(int snapThis)
+                {
+                    activeVoxI = snapThis; CheckVoxIndexFlying(); if (toSearchCount > -1) return activeVoxI;
+
+                    for (int rad = 1; rad < snapRadius; rad++)
+                    {
+                        activeVoxI = snapThis + rad; CheckVoxIndexFlying(); if (toSearchCount > -1) return activeVoxI;
+                        activeVoxI = snapThis - rad; CheckVoxIndexFlying(); if (toSearchCount > -1) return activeVoxI;
+
+                        activeVoxI = snapThis + (vCountZ * rad); CheckVoxIndexFlying(); if (toSearchCount > -1) return activeVoxI;
+                        activeVoxI = snapThis - (vCountZ * rad); CheckVoxIndexFlying(); if (toSearchCount > -1) return activeVoxI;
+
+                        activeVoxI = snapThis + (vCountYZ * rad); CheckVoxIndexFlying(); if (toSearchCount > -1) return activeVoxI;
+                        activeVoxI = snapThis - (vCountYZ * rad); CheckVoxIndexFlying(); if (toSearchCount > -1) return activeVoxI;
+                    }
+
+                    return snapThis;
+                }
+
+                #endregion ModeFlying
+
+
+                #region ModeWalking
+
+                void DoPathfindWalking()
+                {
+                    while (toSearchCount > -1)
+                    {
+                        totalVoxelsSearched++;
+                        if (totalVoxelsSearched > maxVoxelsSearched || closestVoxI == endVoxI) break;
+
+                        //Get voxel index to search
+                        tempI = toSearchIndex[toSearchCount];
+                        toSearchIndex.RemoveAt(toSearchCount);
+                        toSearchValue.RemoveAt(toSearchCount);
+                        toSearchCount--;
+
+                        activeVoxI = tempI + 1;
+                        activeDirI = 1;
+                        CheckVoxIndexWalking();
+
+                        activeVoxI = tempI - 1;
+                        activeDirI = 2;
+                        CheckVoxIndexWalking();
+
+                        activeVoxI = tempI + vCountZ;
+                        activeDirI = 3;
+                        CheckVoxIndexWalking();
+
+                        activeVoxI = tempI - vCountZ;
+                        activeDirI = 4;
+                        CheckVoxIndexWalking();
+
+                        activeVoxI = tempI + vCountYZ;
+                        activeDirI = 5;
+                        CheckVoxIndexWalking();
+
+                        activeVoxI = tempI - vCountYZ;
+                        activeDirI = 6;
+                        CheckVoxIndexWalking();
+                    }
+                }
+
+                void CheckVoxIndexWalking()
+                {
+                    if (vSearched.TryAdd(activeVoxI, activeDirI) == false) return;
+
+                    //Check if voxel is overlapping
+                    if (vTypes[activeVoxI] > VoxGlobalSettings.solidTypeStart) return;
+
+                    activeType = 0;
+                    for (tempLoop = 1; tempLoop < aiSize; tempLoop++)
+                    {
+                        if (vTypes[activeVoxI - (vCountZ * tempLoop)] > VoxGlobalSettings.solidTypeStart) { activeType = 2; break; }
+                        if (vTypes[activeVoxI + tempLoop] > VoxGlobalSettings.solidTypeStart) { activeType = 1; break; }
+                        if (vTypes[activeVoxI - tempLoop] > VoxGlobalSettings.solidTypeStart) { activeType = 1; break; }
+                        if (vTypes[activeVoxI + (vCountZ * tempLoop)] > VoxGlobalSettings.solidTypeStart) { activeType = 1; break; }
+                        if (vTypes[activeVoxI + (vCountYZ * tempLoop)] > VoxGlobalSettings.solidTypeStart) { activeType = 1; break; }
+                        if (vTypes[activeVoxI - (vCountYZ * tempLoop)] > VoxGlobalSettings.solidTypeStart) { activeType = 1; break; }
+
+                        //+X+Z-Y
+                        if (vTypes[activeVoxI + ((1 + vCountYZ - vCountZ) * tempLoop)] > VoxGlobalSettings.solidTypeStart) { activeType = 1; break; }
+
+                        //+X+Z+Y
+                        if (vTypes[activeVoxI + ((1 + vCountYZ + vCountZ) * tempLoop)] > VoxGlobalSettings.solidTypeStart) { activeType = 1; break; }
+
+                        //+X-Z+Y
+                        if (vTypes[activeVoxI + ((1 - vCountYZ + vCountZ) * tempLoop)] > VoxGlobalSettings.solidTypeStart) { activeType = 1; break; }
+
+                        //+X-Z-Y
+                        if (vTypes[activeVoxI + ((1 - vCountYZ - vCountZ) * tempLoop)] > VoxGlobalSettings.solidTypeStart) { activeType = 1; break; }
+
+                        //-X+Z-Y
+                        if (vTypes[activeVoxI - ((1 + vCountYZ - vCountZ) * tempLoop)] > VoxGlobalSettings.solidTypeStart) { activeType = 1; break; }
+
+                        //-X+Z+Y
+                        if (vTypes[activeVoxI - ((1 + vCountYZ + vCountZ) * tempLoop)] > VoxGlobalSettings.solidTypeStart) { activeType = 1; break; }
+
+                        //-X-Z+Y
+                        if (vTypes[activeVoxI - ((1 - vCountYZ + vCountZ) * tempLoop)] > VoxGlobalSettings.solidTypeStart) { activeType = 1; break; }
+
+                        //-X-Z-Y
+                        if (vTypes[activeVoxI - ((1 - vCountYZ - vCountZ) * tempLoop)] > VoxGlobalSettings.solidTypeStart) { activeType = 1; break; }
+                    }
+
+                    //Do falling
+                    if (activeDirI == 4 && activeType != 2)
+                    {
+                        for (tempLoop = aiSize; tempLoop < snapRadiusExtended; tempLoop++)
+                        {
+                            if (vTypes[activeVoxI - (vCountZ * tempLoop)] > VoxGlobalSettings.solidTypeStart) { activeType = 2; break; }
+                        }
+
+                        if (activeType != 2) return;
+
+                        tempLoop = 4;
+                        goto SkipReturnInvalid;
+                    }
+
+                    if (activeType > 0) return;
+
+                    //Check if voxel is close enough to any surface
+                    if (activeDirI == 4) goto SkipReturnInvalid;
+
+                    for (tempLoop = 1; tempLoop < snapRadius; tempLoop++)
+                    {
+                        tempVoxI = activeVoxI - (vCountZ * tempLoop); if (CheckShit() == true) { goto SkipReturnInvalid; };
+                    }
+
+                    bool CheckShit()
+                    {
+                        //+X+Z-Y
+                        activeType = vTypes[tempVoxI + ((1 + vCountYZ - vCountZ) * aiSizeExtented)]; if (activeType > VoxGlobalSettings.solidTypeStart) { return true; }
+                        //+X-Z-Y
+                        activeType = vTypes[tempVoxI + ((1 - vCountYZ - vCountZ) * aiSizeExtented)]; if (activeType > VoxGlobalSettings.solidTypeStart) { return true; }
+                        //-X+Z-Y
+                        activeType = vTypes[tempVoxI - ((1 + vCountYZ - vCountZ) * aiSizeExtented)]; if (activeType > VoxGlobalSettings.solidTypeStart) { return true; }
+                        //-X-Z-Y
+                        activeType = vTypes[tempVoxI - ((1 - vCountYZ - vCountZ) * aiSizeExtented)]; if (activeType > VoxGlobalSettings.solidTypeStart) { return true; }
+
+                        activeType = vTypes[tempVoxI + aiSizeExtented]; if (activeType > VoxGlobalSettings.solidTypeStart) { return true; }
+                        activeType = vTypes[tempVoxI - aiSizeExtented]; if (activeType > VoxGlobalSettings.solidTypeStart) { return true; }
+                        activeType = vTypes[tempVoxI - (vCountZ * aiSizeExtented)]; if (activeType > VoxGlobalSettings.solidTypeStart) { return true; }
+                        activeType = vTypes[tempVoxI + (vCountYZ * aiSizeExtented)]; if (activeType > VoxGlobalSettings.solidTypeStart) { return true; }
+                        activeType = vTypes[tempVoxI - (vCountYZ * aiSizeExtented)]; if (activeType > VoxGlobalSettings.solidTypeStart) { return true; }
+
+                        return false;
+                    }
+
+                    return;
+                    SkipReturnInvalid:;
+
+                    //Voxel is valid, add it to the path
+                    tempType = vTypes[activeVoxI];
+                    if (tempType > 0) activeType = tempType;//If inside soft voxel, use it as type
+                    tempCostMultiplier = 1.0f + (0.2f * (tempLoop - 1));
+
+                    AddVoxelToPath();
+                }
+
+                //activeVoxI + ((1 + vCountYZ - vCountZ) * tempLoop)
+                //activeVoxI + ((1 + vCountYZ + vCountZ) * tempLoop)
+                //activeVoxI + ((1 - vCountYZ + vCountZ) * tempLoop)
+                //activeVoxI + ((1 - vCountYZ - vCountZ) * tempLoop)
+                //activeVoxI - ((1 + vCountYZ - vCountZ) * tempLoop)
+                //activeVoxI - ((1 + vCountYZ + vCountZ) * tempLoop)
+                //activeVoxI - ((1 - vCountYZ + vCountZ) * tempLoop)
+                //activeVoxI - ((1 - vCountYZ - vCountZ) * tempLoop)
+
+                int SnapToValidVoxelWalking(int snapThis)
+                {
+                    activeVoxI = snapThis; CheckVoxIndexWalking(); if (toSearchCount > -1) return activeVoxI;
+
+                    for (int rad = 1; rad < snapRadius; rad++)
+                    {
+                        activeVoxI = snapThis + rad; CheckVoxIndexWalking(); if (toSearchCount > -1) return activeVoxI;
+                        activeVoxI = snapThis - rad; CheckVoxIndexWalking(); if (toSearchCount > -1) return activeVoxI;
+
+                        activeVoxI = snapThis + (vCountZ * rad); CheckVoxIndexWalking(); if (toSearchCount > -1) return activeVoxI;
+                        activeVoxI = snapThis - (vCountZ * rad); CheckVoxIndexWalking(); if (toSearchCount > -1) return activeVoxI;
+
+                        activeVoxI = snapThis + (vCountYZ * rad); CheckVoxIndexWalking(); if (toSearchCount > -1) return activeVoxI;
+                        activeVoxI = snapThis - (vCountYZ * rad); CheckVoxIndexWalking(); if (toSearchCount > -1) return activeVoxI;
+                    }
+
+                    return snapThis;
+                }
+
+                #endregion ModeWalking
             }
         }
 
