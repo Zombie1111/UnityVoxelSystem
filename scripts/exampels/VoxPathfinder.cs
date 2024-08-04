@@ -371,7 +371,8 @@ namespace zombVoxels
 
                 void AddVoxelToPath()
                 {
-                    //Get manhattan distance between tempVoxI and endVoxI
+                    //Get distance between activeVoxI and endVoxI
+                    //Manhattan distance
                     tempReminderA = activeVoxI % (vCountY * vCountZ);
                     tempReminderB = endVoxI % (vCountY * vCountZ);
 
@@ -381,27 +382,12 @@ namespace zombVoxels
                         + math.abs((tempReminderA % vCountZ) - (tempReminderB % vCountZ))
                         );
 
-                    //tempVoxA = math.abs((activeVoxI / (vCountY * vCountZ)) - (endVoxI / (vCountY * vCountZ)));
-                    //tempVoxB = math.abs((tempDeltaX / vCountZ) - (tempDeltaY / vCountZ));
-                    //tempDeltaZ = math.abs((tempDeltaX % vCountZ) - (tempDeltaY % vCountZ));
-                    //tempVValue = (ushort)(Math.Sqrt((tempVoxA * tempVoxA) + (tempVoxB * tempVoxB) + (tempDeltaZ * tempDeltaZ)) * 10);
-
+                    //Weird distance
                     //tempVValue = (ushort)(
                     //    math.abs((activeVoxI % vCountZ) - (endVoxI % vCountZ))
                     //    + math.abs((activeVoxI % vCountY) - (endVoxI % vCountY))
                     //    + math.abs((activeVoxI / (vCountY * vCountZ)) - (endVoxI / (vCountY * vCountZ)))
                     //    );
-
-                    //tempVValue = (ushort)(
-                    //    math.abs((activeVoxI % vCountZ) - (endVoxI % vCountZ))
-                    //    + math.abs((activeVoxI % vCountY) - (endVoxI % vCountY))
-                    //    + math.abs((activeVoxI / vCountY) - (endVoxI / vCountY))
-                    //    );
-
-                    //tempDeltaX = math.abs((activeVoxI % vCountZ) - (endVoxI % vCountZ));
-                    //tempDeltaY = math.abs((activeVoxI % vCountY) - (endVoxI % vCountY));
-                    //tempDeltaZ = math.abs((activeVoxI / vCountY) - (endVoxI / vCountY));
-                    //tempVValue = (ushort)(Math.Sqrt((tempDeltaX * tempDeltaX) + (tempDeltaY * tempDeltaY) + (tempDeltaZ * tempDeltaZ)) * 100);
 
                     if (tempCostMultiplier != 1.0f) tempVValue = (ushort)math.round(tempVValue * tempCostMultiplier);
                     if (voxTypeToMultiply.TryGetValue(activeType, out float tempMultiply) == true) tempVValue = (ushort)math.round(tempVValue * tempMultiply);
