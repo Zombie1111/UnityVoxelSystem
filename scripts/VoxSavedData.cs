@@ -1,3 +1,4 @@
+//https://github.com/Zombie1111/UnityVoxelSystem
 using System.Collections.Generic;
 using Unity.Collections;
 using UnityEditor;
@@ -41,4 +42,35 @@ namespace zombVoxels
 #endif
         }
     }
+
+#if UNITY_EDITOR
+    [CustomEditor(typeof(VoxSavedData))]
+    public class FractureSaveAssetEditor : Editor
+    {
+        private bool showFloatVariable = false;
+
+        public override void OnInspectorGUI()
+        {
+            // Show the button to toggle the float variable
+            if (GUILayout.Button("Show Voxel Cache Data (MAY FREEZE UNITY!)"))
+            {
+                showFloatVariable = !showFloatVariable;
+            }
+
+            if (showFloatVariable)
+            {
+                // Show the variables
+                serializedObject.Update(); // Ensure serialized object is up to date
+
+                DrawPropertiesExcluding(serializedObject, "m_Script");
+            }
+
+            // Apply modifications to the asset
+            if (GUI.changed)
+            {
+                EditorUtility.SetDirty(target);
+            }
+        }
+    }
+#endif
 }

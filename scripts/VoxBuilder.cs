@@ -1,10 +1,10 @@
+//https://github.com/Zombie1111/UnityVoxelSystem
 using UnityEngine.SceneManagement;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEditor;
 using System;
 using UnityEditor.SceneManagement;
-using Unity.VisualScripting;
 
 namespace zombVoxels
 {
@@ -52,7 +52,7 @@ namespace zombVoxels
                 voxGlobal.ClearEditorVoxelSystem();
                 if (voxGlobal.ValidateVoxelSystem() == false) return false;
 
-                int colCount = colIdToCol.Count;
+                float colCount = colIdToCol.Count;
                 int colProgress = 0;
 
                 foreach (var colIdCol in colIdToCol)
@@ -426,6 +426,30 @@ namespace zombVoxels
 
             return true;
         }
+
+#if UNITY_EDITOR
+        [MenuItem("Tools/Voxel System/Toggle Draw Editor Voxels")]
+        private static void ToggleAllDrawEditorVoxels()
+        {
+            if (Application.isPlaying == false)
+            {
+                Debug.LogError("Can only toggle at runtime");
+                return;
+            }
+
+            bool didToggleAny = false;
+
+            foreach (var vHandler in GameObject.FindObjectsByType<VoxGlobalHandler>(FindObjectsInactive.Exclude, FindObjectsSortMode.None))
+            {
+                vHandler.debugDoUpdateVisualVoxels = !vHandler.debugDoUpdateVisualVoxels;
+                didToggleAny = true;
+            }
+
+            if (didToggleAny == true) return;
+
+            Debug.LogError("Found no active VoxGlobalHandler in the current scene");
+        }
+#endif
     }
 }
 

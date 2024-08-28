@@ -1,8 +1,10 @@
+//https://github.com/Zombie1111/UnityVoxelSystem
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
 using zombVoxels;
 
+[DefaultExecutionOrder(200)]
 public class VoxParent : MonoBehaviour
 {
     [Header("Voxel Settings")]
@@ -80,19 +82,21 @@ public class VoxParent : MonoBehaviour
 
         //Make sure voxTrans is enabled
         SkipTransSetup:;
-        voxGlobal.SetVoxTransActiveStatus(transform, true);
-
+        //voxGlobal.SetVoxTransActiveStatus(transform, true);
+        SetVoxParentActiveStatus(true);
     }
 
     private void OnDisable()
     {
         //Make sure voxTrans is disabled
-        voxGlobal.SetVoxTransActiveStatus(transform, false);
+        //voxGlobal.SetVoxTransActiveStatus(transform, false);
+        SetVoxParentActiveStatus(false);
     }
 
     private void OnDestroy()
     {
-        voxGlobal.SetVoxTransActiveStatus(transform, false);
+        SetVoxParentActiveStatus(false);
+        //voxGlobal.SetVoxTransActiveStatus(transform, false);
     }
 
     /// <summary>
@@ -124,5 +128,16 @@ public class VoxParent : MonoBehaviour
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// Enable or Disable all voxel transforms that has this parent
+    /// </summary>
+    public void SetVoxParentActiveStatus(bool toActive)
+    {
+        foreach (var vCol in voxCols)
+        {
+            voxGlobal.SetVoxTransActiveStatus(vCol.col.transform, toActive);
+        }
     }
 }

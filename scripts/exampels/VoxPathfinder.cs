@@ -1,3 +1,4 @@
+//https://github.com/Zombie1111/UnityVoxelSystem
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -5,10 +6,8 @@ using Unity.Burst;
 using Unity.Collections;
 using Unity.Jobs;
 using Unity.Mathematics;
-using Unity.VisualScripting;
-using Unity.VisualScripting.FullSerializer;
-using UnityEditor;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 namespace zombVoxels
 {
@@ -25,39 +24,71 @@ namespace zombVoxels
 
         #region SetupPathfinder
 
-        private VoxGlobalHandler voxHandler;
+        [System.NonSerialized] public VoxGlobalHandler voxHandler;
+
+        private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
+        {
+            if (voxHandler != null) return;
+            SetVoxGlobalHandler(VoxGlobalHandler.TryGetValidGlobalHandler(pendingRequests.Count > 0));
+        }
 
         private void Start()
         {
-            voxHandler = VoxGlobalHandler.TryGetValidGlobalHandler();
-            if (voxHandler == null) return;
-
-            SetupPathfindJob();
-
-            //Subscribe to event
-            voxHandler.OnGlobalReadAccessStart += OnGlobalReadAccessStart;
-            voxHandler.OnGlobalReadAccessStop += OnGlobalReadAccessStop;
+            SceneManager.sceneLoaded += OnSceneLoaded;
+            SetVoxGlobalHandler(VoxGlobalHandler.TryGetValidGlobalHandler(pendingRequests.Count > 0));
         }
 
         private void OnDestroy()
         {
+            SceneManager.sceneLoaded -= OnSceneLoaded;
+            SetVoxGlobalHandler(null);
+        }
+
+        /// <summary>
+        /// Sets what globalVoxelHandler to use, pass null to clear
+        /// </summary>
+        public void SetVoxGlobalHandler(VoxGlobalHandler newHandler)
+        {
+            if (voxHandler == newHandler)
+            {
+                if (voxHandler == null)
+                {
+                    ClearAllocatedMemory();//Make sure memory is always cleared if null
+                    OnClearVoxelSystem();
+                }
+
+                return;
+            }
+
             ClearAllocatedMemory();
 
+            if (voxHandler != null)
+            {
+                voxHandler.OnGlobalReadAccessStart -= OnGlobalReadAccessStart;
+                voxHandler.OnGlobalReadAccessStop -= OnGlobalReadAccessStop;
+                voxHandler.OnClearVoxelSystem -= OnClearVoxelSystem;
+                voxHandler.OnSetupVoxelSystem -= OnSetupVoxelSystem;
+                if (voxHandler.voxRuntimeIsValid == true) OnClearVoxelSystem();//Not been cleared, so call manually
+            }
+
+            voxHandler = newHandler;
             if (voxHandler == null) return;
 
-            //Unsubscrive from event
-            voxHandler.OnGlobalReadAccessStart -= OnGlobalReadAccessStart;
-            voxHandler.OnGlobalReadAccessStop -= OnGlobalReadAccessStop;
+            SetupPathfindJob();
+            voxHandler.OnGlobalReadAccessStart += OnGlobalReadAccessStart;
+            voxHandler.OnGlobalReadAccessStop += OnGlobalReadAccessStop;
+            voxHandler.OnClearVoxelSystem += OnClearVoxelSystem;
+            voxHandler.OnSetupVoxelSystem += OnSetupVoxelSystem;
+            if (voxHandler.voxRuntimeIsValid == true) OnSetupVoxelSystem();//Already setup so call manually
         }
 
         private void SetupPathfindJob()
         {
             fp_job = new()
             {
+                //_voxsType and _voxWorld is assigned in OnSetupVoxelSystem()
                 _activeRequest = new(Allocator.Persistent),
                 _voxsSearched = new(maxVoxelsSearched, Allocator.Persistent),
-                _voxsType = voxHandler.cvo_job.voxsType.AsReadOnly(),
-                _voxWorld = voxHandler.cvo_job.voxWorld.AsReadOnly(),
                 _toSearchValues = new(maxVoxelsToSearch, Allocator.Persistent),
                 _toSearchIndex = new(maxVoxelsToSearch, Allocator.Persistent),
                 _maxVoxelsSearched = new(maxVoxelsSearched, Allocator.Persistent),
@@ -69,7 +100,9 @@ namespace zombVoxels
         private void ClearAllocatedMemory()
         {
             OnGlobalReadAccessStop();
+            DiscardAllPendingRequests();
 
+            //_voxsType and _voxWorld is cleared in OnClearVoxelSystem()
             if (fp_job._activeRequest.IsCreated == true) fp_job._activeRequest.Dispose();
             if (fp_job._toSearchIndex.IsCreated == true) fp_job._toSearchIndex.Dispose();
             if (fp_job._toSearchValues.IsCreated == true) fp_job._toSearchValues.Dispose();
@@ -77,6 +110,21 @@ namespace zombVoxels
             if (fp_job._maxVoxelsSearched.IsCreated == true) fp_job._maxVoxelsSearched.Dispose();
             if (fp_job._voxTypeToMultiply.IsCreated == true) fp_job._voxTypeToMultiply.Dispose();
             if (fp_job._resultPath.IsCreated == true) fp_job._resultPath.Dispose();
+        }
+
+        private bool voxelSystemIsValid = false;
+
+        private void OnClearVoxelSystem()
+        {
+            //_voxsType and _voxWorld dont need to be cleared or disposed
+            voxelSystemIsValid = false;
+        }
+
+        private void OnSetupVoxelSystem()
+        {
+            fp_job._voxsType = voxHandler.cvo_job.voxsType.AsReadOnly();
+            fp_job._voxWorld = voxHandler.cvo_job.voxWorld.AsReadOnly();
+            voxelSystemIsValid = true;
         }
 
         #endregion SetupPathfinder
@@ -144,9 +192,10 @@ namespace zombVoxels
 
         private void OnGlobalReadAccessStart()
         {
-            //Only check 
-            if (fp_jobIsActive == true) return;
+            //Get if can start
+            if (fp_jobIsActive == true || voxelSystemIsValid == false) return;
 
+            //Get request
             TryGetActiveRequestAgain:;
             if (pendingRequests.TryDequeue(out var activeRequest) == false) return;
             if (discardedPendingRequests.Remove(activeRequest.requestId) == true)
@@ -155,14 +204,13 @@ namespace zombVoxels
                 goto TryGetActiveRequestAgain;
             }
 
+            //Schedule request
             if (pendingRequests.Count == 0) discardedPendingRequests.Clear();
 
             fp_jobIsActive = true;
             fp_job._activeRequest.Value = activeRequest;
             fp_handle = fp_job.Schedule();
         }
-
-        public float toll;
 
         private void OnGlobalReadAccessStop()
         {
@@ -186,6 +234,11 @@ namespace zombVoxels
         /// </summary>
         public void DiscardAllPendingRequests()
         {
+            while (pendingRequests.TryDequeue(out var request) == true)
+            {
+                OnPathRequestDiscarded?.Invoke(request.requestId);
+            }
+
             pendingRequests.Clear();
             discardedPendingRequests.Clear();
         }
@@ -200,6 +253,12 @@ namespace zombVoxels
         [System.NonSerialized] public FindPath_work fp_job;
         private JobHandle fp_handle;
         private bool fp_jobIsActive = false;
+
+        public struct PathNode
+        {
+            public Vector3 position;
+            public Vector3 normal;
+        }
 
         [BurstCompile]
         public struct FindPath_work : IJob
@@ -217,10 +276,10 @@ namespace zombVoxels
             public NativeHashMap<byte, float> _voxTypeToMultiply;
 
             /// <summary>
-            /// voxel indexs path from end to start, only garanteed to be valid in OnPathRequestComplete() callback
+            /// path nodes from end to start, only garanteed to be valid in OnPathRequestComplete() callback
             /// (_resultPath[0] == closestToEnd, _resultPath[^1] == closestToStart)
             /// </summary>
-            public NativeList<Vector3> _resultPath;
+            public NativeList<PathNode> _resultPath;
 
             public unsafe void Execute()
             {
@@ -240,8 +299,16 @@ namespace zombVoxels
                 int vCountZ = vWorld.vCountZ;
                 int vCountYZ = vWorld.vCountYZ;
                 byte aiSize = request.radius;
-                int aiSizeExtented = aiSize - 1;
+                int aiSizeReduced = aiSize - 1;
+                int aiSizeExtended = aiSize + 1;
                 float tempCostMultiplier = 1.0f;
+                int maxVoxIndex = vWorld.vCountXYZ - 1;
+
+                //Precomputed directions
+                int iDir_upL = 1 + vCountYZ - vCountZ;
+                int iDir_upR = 1 + vCountYZ + vCountZ;
+                int iDir_downR = 1 - vCountYZ + vCountZ;
+                int iDir_downL = 1 - vCountYZ - vCountZ;
 
                 //Reset arrays
                 toSearchValue.Clear();
@@ -257,7 +324,6 @@ namespace zombVoxels
                 byte activeType;
                 ushort tempVValue;
                 int tempLoop;
-                Vector3 tempVoxPos = Vector3.zero;
                 int tempReminderA;
                 int tempReminderB;
 
@@ -270,6 +336,9 @@ namespace zombVoxels
                 //Get start and end voxel
                 int startVoxI = request.startVoxIndex;
                 int endVoxI = request.endVoxIndex;
+
+                if (startVoxI < 0 || startVoxI > maxVoxIndex
+                    || endVoxI < 0 || endVoxI > maxVoxIndex) return;//Start or end is out of bounds, no path will exist
 
                 if (snapRadius > 0)
                 {
@@ -333,6 +402,8 @@ namespace zombVoxels
                 //Recreate the path 
                 int voxOnPath = closestVoxI;
                 int prevDir = 0;
+                Vector3 tempVoxPos = Vector3.zero;
+                Vector3 halfVox = 0.5f * VoxGlobalSettings.voxelSizeWorld * Vector3.one;
                 vSearched.Remove(startVoxI);
 
                 while (true)
@@ -340,15 +411,22 @@ namespace zombVoxels
                     if (vSearched.TryGetValue(voxOnPath, out activeDirI) == false)
                     {
                         VoxHelpBurst.WVoxIndexToPos(ref voxOnPath, ref tempVoxPos, ref vWorld);
-                        _resultPath.Add(tempVoxPos);
+                        _resultPath.Add(new()
+                        {
+                          position = tempVoxPos + halfVox,
+                          normal = GetVoxelNormal(voxOnPath, ref tempVoxPos)
+                        });
                         break;
                     }
 
-                    //_resultPath.Add(voxOnPath);
                     if (activeDirI != prevDir)
                     {
                         VoxHelpBurst.WVoxIndexToPos(ref voxOnPath, ref tempVoxPos, ref vWorld);
-                        _resultPath.Add(tempVoxPos);
+                        _resultPath.Add(new()
+                        {
+                            position = tempVoxPos + halfVox,
+                            normal = GetVoxelNormal(voxOnPath, ref tempVoxPos)
+                        });
                     }
                     prevDir = activeDirI;
 
@@ -444,6 +522,74 @@ namespace zombVoxels
                     }
                 }
 
+                Vector3 GetVoxelNormal(int voxI, ref Vector3 voxPos)
+                {
+                    //Get avg pos of nearby solid voxels
+                    Vector3 avgPos = Vector3.zero;
+                    Vector3 activePos = Vector3.zero;
+                    int avgCount = 0;
+
+                    activeVoxI = voxI + aiSize; if (vTypes[activeVoxI] > VoxGlobalSettings.solidTypeStart)
+                        { VoxHelpBurst.WVoxIndexToPos(ref activeVoxI, ref activePos, ref vWorld); avgPos += activePos; avgCount++; }
+                    activeVoxI = voxI - aiSize; if (vTypes[activeVoxI] > VoxGlobalSettings.solidTypeStart)
+                        { VoxHelpBurst.WVoxIndexToPos(ref activeVoxI, ref activePos, ref vWorld); avgPos += activePos; avgCount++; }
+                    activeVoxI = voxI + (vCountZ * aiSize); if (vTypes[activeVoxI] > VoxGlobalSettings.solidTypeStart)
+                        { VoxHelpBurst.WVoxIndexToPos(ref activeVoxI, ref activePos, ref vWorld); avgPos += activePos; avgCount++; }
+                    activeVoxI = voxI - (vCountZ * aiSize); if (vTypes[activeVoxI] > VoxGlobalSettings.solidTypeStart)
+                        { VoxHelpBurst.WVoxIndexToPos(ref activeVoxI, ref activePos, ref vWorld); avgPos += activePos; avgCount++; }
+                    activeVoxI = voxI + (vCountYZ * aiSize); if (vTypes[activeVoxI] > VoxGlobalSettings.solidTypeStart)
+                        { VoxHelpBurst.WVoxIndexToPos(ref activeVoxI, ref activePos, ref vWorld); avgPos += activePos; avgCount++; }
+                    activeVoxI = voxI - (vCountYZ * aiSize); if (vTypes[activeVoxI] > VoxGlobalSettings.solidTypeStart)
+                        { VoxHelpBurst.WVoxIndexToPos(ref activeVoxI, ref activePos, ref vWorld); avgPos += activePos; avgCount++; }
+
+                    tempVoxI = voxI + iDir_upL; CheckShit();
+                    tempVoxI = voxI + iDir_upR; CheckShit();
+                    tempVoxI = voxI + iDir_downR; CheckShit();
+                    tempVoxI = voxI + iDir_downL; CheckShit();
+                    tempVoxI = voxI - iDir_upL; CheckShit();
+                    tempVoxI = voxI - iDir_upR; CheckShit();
+                    tempVoxI = voxI - iDir_downR; CheckShit();
+                    tempVoxI = voxI - iDir_downL; CheckShit();
+
+                    void CheckShit()
+                    {
+                        //+X+Z-Y
+                        activeVoxI = tempVoxI + (iDir_upL * aiSizeReduced); if (vTypes[activeVoxI] > VoxGlobalSettings.solidTypeStart)
+                            { VoxHelpBurst.WVoxIndexToPos(ref activeVoxI, ref activePos, ref vWorld); avgPos += activePos; avgCount++; }
+                        activeVoxI = tempVoxI + (iDir_upR * aiSizeReduced); if (vTypes[activeVoxI] > VoxGlobalSettings.solidTypeStart)
+                            { VoxHelpBurst.WVoxIndexToPos(ref activeVoxI, ref activePos, ref vWorld); avgPos += activePos; avgCount++; }
+                        activeVoxI = tempVoxI + (iDir_downR * aiSizeReduced); if (vTypes[activeVoxI] > VoxGlobalSettings.solidTypeStart)
+                            { VoxHelpBurst.WVoxIndexToPos(ref activeVoxI, ref activePos, ref vWorld); avgPos += activePos; avgCount++; }
+                        activeVoxI = tempVoxI + (iDir_downL * aiSizeReduced); if (vTypes[activeVoxI] > VoxGlobalSettings.solidTypeStart)
+                            { VoxHelpBurst.WVoxIndexToPos(ref activeVoxI, ref activePos, ref vWorld); avgPos += activePos; avgCount++; }
+                        activeVoxI = tempVoxI - (iDir_upL * aiSizeReduced); if (vTypes[activeVoxI] > VoxGlobalSettings.solidTypeStart)
+                            { VoxHelpBurst.WVoxIndexToPos(ref activeVoxI, ref activePos, ref vWorld); avgPos += activePos; avgCount++; }
+                        activeVoxI = tempVoxI - (iDir_upR * aiSizeReduced); if (vTypes[activeVoxI] > VoxGlobalSettings.solidTypeStart)
+                            { VoxHelpBurst.WVoxIndexToPos(ref activeVoxI, ref activePos, ref vWorld); avgPos += activePos; avgCount++; }
+                        activeVoxI = tempVoxI - (iDir_downR * aiSizeReduced); if (vTypes[activeVoxI] > VoxGlobalSettings.solidTypeStart)
+                            { VoxHelpBurst.WVoxIndexToPos(ref activeVoxI, ref activePos, ref vWorld); avgPos += activePos; avgCount++; }
+                        activeVoxI = tempVoxI - (iDir_downL * aiSizeReduced); if (vTypes[activeVoxI] > VoxGlobalSettings.solidTypeStart)
+                            { VoxHelpBurst.WVoxIndexToPos(ref activeVoxI, ref activePos, ref vWorld); avgPos += activePos; avgCount++; }
+
+                        activeVoxI = tempVoxI + aiSizeReduced; if (vTypes[activeVoxI] > VoxGlobalSettings.solidTypeStart)
+                            { VoxHelpBurst.WVoxIndexToPos(ref activeVoxI, ref activePos, ref vWorld); avgPos += activePos; avgCount++; }
+                        activeVoxI = tempVoxI - aiSizeReduced; if (vTypes[activeVoxI] > VoxGlobalSettings.solidTypeStart)
+                            { VoxHelpBurst.WVoxIndexToPos(ref activeVoxI, ref activePos, ref vWorld); avgPos += activePos; avgCount++; }
+                        activeVoxI = tempVoxI + (vCountZ * aiSizeReduced); if (vTypes[activeVoxI] > VoxGlobalSettings.solidTypeStart) 
+                            { VoxHelpBurst.WVoxIndexToPos(ref activeVoxI, ref activePos, ref vWorld); avgPos += activePos; avgCount++; }
+                        activeVoxI = tempVoxI - (vCountZ * aiSizeReduced); if (vTypes[activeVoxI] > VoxGlobalSettings.solidTypeStart)
+                            { VoxHelpBurst.WVoxIndexToPos(ref activeVoxI, ref activePos, ref vWorld); avgPos += activePos; avgCount++; }
+                        activeVoxI = tempVoxI + (vCountYZ * aiSizeReduced); if (vTypes[activeVoxI] > VoxGlobalSettings.solidTypeStart) 
+                            { VoxHelpBurst.WVoxIndexToPos(ref activeVoxI, ref activePos, ref vWorld); avgPos += activePos; avgCount++; }
+                        activeVoxI = tempVoxI - (vCountYZ * aiSizeReduced); if (vTypes[activeVoxI] > VoxGlobalSettings.solidTypeStart)
+                            { VoxHelpBurst.WVoxIndexToPos(ref activeVoxI, ref activePos, ref vWorld); avgPos += activePos; avgCount++; }
+                    }
+
+                    //Get dir to avg nearby solid voxel pos
+                    return (voxPos - (avgPos / avgCount)).normalized;
+
+                }
+
                 #region ModeClimbing
 
                 void DoPathfindClimbing()
@@ -487,7 +633,18 @@ namespace zombVoxels
 
                 void CheckVoxIndexClimbing()
                 {
+                    //Return if already searched
                     if (vSearched.TryAdd(activeVoxI, activeDirI) == false) return;
+
+                    //Prevent out of bounds
+                    tempVoxI = activeVoxI + (iDir_upL * aiSizeExtended); if (tempVoxI < 0 || tempVoxI > maxVoxIndex) return;
+                    tempVoxI = activeVoxI + (iDir_upR * aiSizeExtended); if (tempVoxI < 0 || tempVoxI > maxVoxIndex) return;
+                    tempVoxI = activeVoxI + (iDir_downR * aiSizeExtended); if (tempVoxI < 0 || tempVoxI > maxVoxIndex) return;
+                    tempVoxI = activeVoxI + (iDir_downL * aiSizeExtended); if (tempVoxI < 0 || tempVoxI > maxVoxIndex) return;
+                    tempVoxI = activeVoxI - (iDir_upL * aiSizeExtended); if (tempVoxI < 0 || tempVoxI > maxVoxIndex) return;
+                    tempVoxI = activeVoxI - (iDir_upR * aiSizeExtended); if (tempVoxI < 0 || tempVoxI > maxVoxIndex) return;
+                    tempVoxI = activeVoxI - (iDir_downR * aiSizeExtended); if (tempVoxI < 0 || tempVoxI > maxVoxIndex) return;
+                    tempVoxI = activeVoxI - (iDir_downL * aiSizeExtended); if (tempVoxI < 0 || tempVoxI > maxVoxIndex) return;
 
                     //Check if voxel is overlapping
                     if (vTypes[activeVoxI] > VoxGlobalSettings.solidTypeStart) return;
@@ -501,32 +658,32 @@ namespace zombVoxels
                         if (vTypes[activeVoxI - (vCountZ * tempLoop)] > VoxGlobalSettings.solidTypeStart) { activeType = 1; break; }
                         if (vTypes[activeVoxI + (vCountYZ * tempLoop)] > VoxGlobalSettings.solidTypeStart) { activeType = 1; break; }
                         if (vTypes[activeVoxI - (vCountYZ * tempLoop)] > VoxGlobalSettings.solidTypeStart) { activeType = 1; break; }
-                    
+
                         //+X+Z-Y
-                        if (vTypes[activeVoxI + ((1 + vCountYZ - vCountZ) * tempLoop)] > VoxGlobalSettings.solidTypeStart) { activeType = 1; break; }
-                    
-                         //+X+Z+Y
-                        if (vTypes[activeVoxI + ((1 + vCountYZ + vCountZ) * tempLoop)] > VoxGlobalSettings.solidTypeStart) { activeType = 1; break; }
-                        
-                         //+X-Z+Y
-                        if (vTypes[activeVoxI + ((1 - vCountYZ + vCountZ) * tempLoop)] > VoxGlobalSettings.solidTypeStart) { activeType = 1; break; }
-                         
-                         //+X-Z-Y
-                        if (vTypes[activeVoxI + ((1 - vCountYZ - vCountZ) * tempLoop)] > VoxGlobalSettings.solidTypeStart) { activeType = 1; break; }
-                        
-                         //-X+Z-Y
-                        if (vTypes[activeVoxI - ((1 + vCountYZ - vCountZ) * tempLoop)] > VoxGlobalSettings.solidTypeStart) { activeType = 1; break; }
-                        
-                         //-X+Z+Y
-                        if (vTypes[activeVoxI - ((1 + vCountYZ + vCountZ) * tempLoop)] > VoxGlobalSettings.solidTypeStart) { activeType = 1; break; }
-                        
-                         //-X-Z+Y
-                        if (vTypes[activeVoxI - ((1 - vCountYZ + vCountZ) * tempLoop)] > VoxGlobalSettings.solidTypeStart) { activeType = 1; break; }
-                        
-                         //-X-Z-Y
-                        if (vTypes[activeVoxI - ((1 - vCountYZ - vCountZ) * tempLoop)] > VoxGlobalSettings.solidTypeStart) { activeType = 1; break; }
+                        if (vTypes[activeVoxI + (iDir_upL * tempLoop)] > VoxGlobalSettings.solidTypeStart) { activeType = 1; break; }
+
+                        //+X+Z+Y
+                        if (vTypes[activeVoxI + (iDir_upR * tempLoop)] > VoxGlobalSettings.solidTypeStart) { activeType = 1; break; }
+
+                        //+X-Z+Y
+                        if (vTypes[activeVoxI + (iDir_downR * tempLoop)] > VoxGlobalSettings.solidTypeStart) { activeType = 1; break; }
+
+                        //+X-Z-Y
+                        if (vTypes[activeVoxI + (iDir_downL * tempLoop)] > VoxGlobalSettings.solidTypeStart) { activeType = 1; break; }
+
+                        //-X+Z-Y
+                        if (vTypes[activeVoxI - (iDir_upL * tempLoop)] > VoxGlobalSettings.solidTypeStart) { activeType = 1; break; }
+
+                        //-X+Z+Y
+                        if (vTypes[activeVoxI - (iDir_upR * tempLoop)] > VoxGlobalSettings.solidTypeStart) { activeType = 1; break; }
+
+                        //-X-Z+Y
+                        if (vTypes[activeVoxI - (iDir_downR * tempLoop)] > VoxGlobalSettings.solidTypeStart) { activeType = 1; break; }
+
+                        //-X-Z-Y
+                        if (vTypes[activeVoxI - (iDir_downL * tempLoop)] > VoxGlobalSettings.solidTypeStart) { activeType = 1; break; }
                     }
-                    
+
                     if (activeType > 0) return;
 
                     //Check if voxel is close enough to any surface, do we really need to check this much?
@@ -537,46 +694,46 @@ namespace zombVoxels
                     activeType = vTypes[activeVoxI + (vCountYZ * aiSize)]; if (activeType > VoxGlobalSettings.solidTypeStart) { goto SkipReturnInvalid; }
                     activeType = vTypes[activeVoxI - (vCountYZ * aiSize)]; if (activeType > VoxGlobalSettings.solidTypeStart) { goto SkipReturnInvalid; }
 
-                    tempVoxI = activeVoxI + (1 + vCountYZ - vCountZ); if (CheckShit() == true) { goto SkipReturnInvalid; };
-                    tempVoxI = activeVoxI + (1 + vCountYZ + vCountZ); if (CheckShit() == true) { goto SkipReturnInvalid; };
-                    tempVoxI = activeVoxI + (1 - vCountYZ + vCountZ); if (CheckShit() == true) { goto SkipReturnInvalid; };
-                    tempVoxI = activeVoxI + (1 - vCountYZ - vCountZ); if (CheckShit() == true) { goto SkipReturnInvalid; };
-                    tempVoxI = activeVoxI - (1 + vCountYZ - vCountZ); if (CheckShit() == true) { goto SkipReturnInvalid; };
-                    tempVoxI = activeVoxI - (1 + vCountYZ + vCountZ); if (CheckShit() == true) { goto SkipReturnInvalid; };
-                    tempVoxI = activeVoxI - (1 - vCountYZ + vCountZ); if (CheckShit() == true) { goto SkipReturnInvalid; };
-                    tempVoxI = activeVoxI - (1 - vCountYZ - vCountZ); if (CheckShit() == true) { goto SkipReturnInvalid; };
+                    tempVoxI = activeVoxI + iDir_upL; if (CheckShit() == true) { goto SkipReturnInvalid; };
+                    tempVoxI = activeVoxI + iDir_upR; if (CheckShit() == true) { goto SkipReturnInvalid; };
+                    tempVoxI = activeVoxI + iDir_downR; if (CheckShit() == true) { goto SkipReturnInvalid; };
+                    tempVoxI = activeVoxI + iDir_downL; if (CheckShit() == true) { goto SkipReturnInvalid; };
+                    tempVoxI = activeVoxI - iDir_upL; if (CheckShit() == true) { goto SkipReturnInvalid; };
+                    tempVoxI = activeVoxI - iDir_upR; if (CheckShit() == true) { goto SkipReturnInvalid; };
+                    tempVoxI = activeVoxI - iDir_downR; if (CheckShit() == true) { goto SkipReturnInvalid; };
+                    tempVoxI = activeVoxI - iDir_downL; if (CheckShit() == true) { goto SkipReturnInvalid; };
 
                     bool CheckShit()
                     {
                         //+X+Z-Y
-                        activeType = vTypes[tempVoxI + ((1 + vCountYZ - vCountZ) * aiSizeExtented)]; if (activeType > VoxGlobalSettings.solidTypeStart) { return true; }
+                        activeType = vTypes[tempVoxI + (iDir_upL * aiSizeReduced)]; if (activeType > VoxGlobalSettings.solidTypeStart) { return true; }
                         //+X+Z+Y
-                        activeType = vTypes[tempVoxI + ((1 + vCountYZ + vCountZ) * aiSizeExtented)]; if (activeType > VoxGlobalSettings.solidTypeStart) { return true; }
+                        activeType = vTypes[tempVoxI + (iDir_upR * aiSizeReduced)]; if (activeType > VoxGlobalSettings.solidTypeStart) { return true; }
                         //+X-Z+Y
-                        activeType = vTypes[tempVoxI + ((1 - vCountYZ + vCountZ) * aiSizeExtented)]; if (activeType > VoxGlobalSettings.solidTypeStart) { return true; }
+                        activeType = vTypes[tempVoxI + (iDir_downR * aiSizeReduced)]; if (activeType > VoxGlobalSettings.solidTypeStart) { return true; }
                         //+X-Z-Y
-                        activeType = vTypes[tempVoxI + ((1 - vCountYZ - vCountZ) * aiSizeExtented)]; if (activeType > VoxGlobalSettings.solidTypeStart) { return true; }
+                        activeType = vTypes[tempVoxI + (iDir_downL * aiSizeReduced)]; if (activeType > VoxGlobalSettings.solidTypeStart) { return true; }
                         //-X+Z-Y
-                        activeType = vTypes[tempVoxI - ((1 + vCountYZ - vCountZ) * aiSizeExtented)]; if (activeType > VoxGlobalSettings.solidTypeStart) { return true; }
+                        activeType = vTypes[tempVoxI - (iDir_upL * aiSizeReduced)]; if (activeType > VoxGlobalSettings.solidTypeStart) { return true; }
                         //-X+Z+Y
-                        activeType = vTypes[tempVoxI - ((1 + vCountYZ + vCountZ) * aiSizeExtented)]; if (activeType > VoxGlobalSettings.solidTypeStart) { return true; }
+                        activeType = vTypes[tempVoxI - (iDir_upR * aiSizeReduced)]; if (activeType > VoxGlobalSettings.solidTypeStart) { return true; }
                         //-X-Z+Y
-                        activeType = vTypes[tempVoxI - ((1 - vCountYZ + vCountZ) * aiSizeExtented)]; if (activeType > VoxGlobalSettings.solidTypeStart) { return true; }
+                        activeType = vTypes[tempVoxI - (iDir_downR * aiSizeReduced)]; if (activeType > VoxGlobalSettings.solidTypeStart) { return true; }
                         //-X-Z-Y
-                        activeType = vTypes[tempVoxI - ((1 - vCountYZ - vCountZ) * aiSizeExtented)]; if (activeType > VoxGlobalSettings.solidTypeStart) { return true; }
+                        activeType = vTypes[tempVoxI - (iDir_downL * aiSizeReduced)]; if (activeType > VoxGlobalSettings.solidTypeStart) { return true; }
 
-                        activeType = vTypes[tempVoxI + aiSizeExtented]; if (activeType > VoxGlobalSettings.solidTypeStart) { return true; }
-                        activeType = vTypes[tempVoxI - aiSizeExtented]; if (activeType > VoxGlobalSettings.solidTypeStart) { return true; }
-                        activeType = vTypes[tempVoxI + (vCountZ * aiSizeExtented)]; if (activeType > VoxGlobalSettings.solidTypeStart) { return true; }
-                        activeType = vTypes[tempVoxI - (vCountZ * aiSizeExtented)]; if (activeType > VoxGlobalSettings.solidTypeStart) { return true; }
-                        activeType = vTypes[tempVoxI + (vCountYZ * aiSizeExtented)]; if (activeType > VoxGlobalSettings.solidTypeStart) { return true; }
-                        activeType = vTypes[tempVoxI - (vCountYZ * aiSizeExtented)]; if (activeType > VoxGlobalSettings.solidTypeStart) { return true; }
+                        activeType = vTypes[tempVoxI + aiSizeReduced]; if (activeType > VoxGlobalSettings.solidTypeStart) { return true; }
+                        activeType = vTypes[tempVoxI - aiSizeReduced]; if (activeType > VoxGlobalSettings.solidTypeStart) { return true; }
+                        activeType = vTypes[tempVoxI + (vCountZ * aiSizeReduced)]; if (activeType > VoxGlobalSettings.solidTypeStart) { return true; }
+                        activeType = vTypes[tempVoxI - (vCountZ * aiSizeReduced)]; if (activeType > VoxGlobalSettings.solidTypeStart) { return true; }
+                        activeType = vTypes[tempVoxI + (vCountYZ * aiSizeReduced)]; if (activeType > VoxGlobalSettings.solidTypeStart) { return true; }
+                        activeType = vTypes[tempVoxI - (vCountYZ * aiSizeReduced)]; if (activeType > VoxGlobalSettings.solidTypeStart) { return true; }
 
                         return false;
                     }
 
                     return;
-                    SkipReturnInvalid:;
+                SkipReturnInvalid:;
 
                     //Voxel is valid, add it to the path
                     tempType = vTypes[activeVoxI];
@@ -585,14 +742,14 @@ namespace zombVoxels
                     AddVoxelToPath();
                 }
 
-                //activeVoxI + ((1 + vCountYZ - vCountZ) * tempLoop)
-                //activeVoxI + ((1 + vCountYZ + vCountZ) * tempLoop)
-                //activeVoxI + ((1 - vCountYZ + vCountZ) * tempLoop)
-                //activeVoxI + ((1 - vCountYZ - vCountZ) * tempLoop)
-                //activeVoxI - ((1 + vCountYZ - vCountZ) * tempLoop)
-                //activeVoxI - ((1 + vCountYZ + vCountZ) * tempLoop)
-                //activeVoxI - ((1 - vCountYZ + vCountZ) * tempLoop)
-                //activeVoxI - ((1 - vCountYZ - vCountZ) * tempLoop)
+                //activeVoxI + (iDir_upL * tempLoop)
+                //activeVoxI + (iDir_upR * tempLoop)
+                //activeVoxI + (iDir_downR * tempLoop)
+                //activeVoxI + (iDir_downL * tempLoop)
+                //activeVoxI - (iDir_upL * tempLoop)
+                //activeVoxI - (iDir_upR * tempLoop)
+                //activeVoxI - (iDir_downR * tempLoop)
+                //activeVoxI - (iDir_downL * tempLoop)
 
                 int SnapToValidVoxelClimbing(int snapThis)
                 {
@@ -658,7 +815,18 @@ namespace zombVoxels
 
                 void CheckVoxIndexFlying()
                 {
+                    //Return if already searched
                     if (vSearched.TryAdd(activeVoxI, activeDirI) == false) return;
+
+                    //Prevent out of bounds
+                    tempVoxI = activeVoxI + (iDir_upL * aiSizeExtended); if (tempVoxI < 0 || tempVoxI > maxVoxIndex) return;
+                    tempVoxI = activeVoxI + (iDir_upR * aiSizeExtended); if (tempVoxI < 0 || tempVoxI > maxVoxIndex) return;
+                    tempVoxI = activeVoxI + (iDir_downR * aiSizeExtended); if (tempVoxI < 0 || tempVoxI > maxVoxIndex) return;
+                    tempVoxI = activeVoxI + (iDir_downL * aiSizeExtended); if (tempVoxI < 0 || tempVoxI > maxVoxIndex) return;
+                    tempVoxI = activeVoxI - (iDir_upL * aiSizeExtended); if (tempVoxI < 0 || tempVoxI > maxVoxIndex) return;
+                    tempVoxI = activeVoxI - (iDir_upR * aiSizeExtended); if (tempVoxI < 0 || tempVoxI > maxVoxIndex) return;
+                    tempVoxI = activeVoxI - (iDir_downR * aiSizeExtended); if (tempVoxI < 0 || tempVoxI > maxVoxIndex) return;
+                    tempVoxI = activeVoxI - (iDir_downL * aiSizeExtended); if (tempVoxI < 0 || tempVoxI > maxVoxIndex) return;
 
                     //Check if voxel is overlapping
                     if (vTypes[activeVoxI] > VoxGlobalSettings.solidTypeStart) return;
@@ -674,28 +842,28 @@ namespace zombVoxels
                         if (vTypes[activeVoxI - (vCountYZ * tempLoop)] > VoxGlobalSettings.solidTypeStart) { activeType = 1; break; }
 
                         //+X+Z-Y
-                        if (vTypes[activeVoxI + ((1 + vCountYZ - vCountZ) * tempLoop)] > VoxGlobalSettings.solidTypeStart) { activeType = 1; break; }
+                        if (vTypes[activeVoxI + (iDir_upL * tempLoop)] > VoxGlobalSettings.solidTypeStart) { activeType = 1; break; }
 
                         //+X+Z+Y
-                        if (vTypes[activeVoxI + ((1 + vCountYZ + vCountZ) * tempLoop)] > VoxGlobalSettings.solidTypeStart) { activeType = 1; break; }
+                        if (vTypes[activeVoxI + (iDir_upR * tempLoop)] > VoxGlobalSettings.solidTypeStart) { activeType = 1; break; }
 
                         //+X-Z+Y
-                        if (vTypes[activeVoxI + ((1 - vCountYZ + vCountZ) * tempLoop)] > VoxGlobalSettings.solidTypeStart) { activeType = 1; break; }
+                        if (vTypes[activeVoxI + (iDir_downR * tempLoop)] > VoxGlobalSettings.solidTypeStart) { activeType = 1; break; }
 
                         //+X-Z-Y
-                        if (vTypes[activeVoxI + ((1 - vCountYZ - vCountZ) * tempLoop)] > VoxGlobalSettings.solidTypeStart) { activeType = 1; break; }
+                        if (vTypes[activeVoxI + (iDir_downL * tempLoop)] > VoxGlobalSettings.solidTypeStart) { activeType = 1; break; }
 
                         //-X+Z-Y
-                        if (vTypes[activeVoxI - ((1 + vCountYZ - vCountZ) * tempLoop)] > VoxGlobalSettings.solidTypeStart) { activeType = 1; break; }
+                        if (vTypes[activeVoxI - (iDir_upL * tempLoop)] > VoxGlobalSettings.solidTypeStart) { activeType = 1; break; }
 
                         //-X+Z+Y
-                        if (vTypes[activeVoxI - ((1 + vCountYZ + vCountZ) * tempLoop)] > VoxGlobalSettings.solidTypeStart) { activeType = 1; break; }
+                        if (vTypes[activeVoxI - (iDir_upR * tempLoop)] > VoxGlobalSettings.solidTypeStart) { activeType = 1; break; }
 
                         //-X-Z+Y
-                        if (vTypes[activeVoxI - ((1 - vCountYZ + vCountZ) * tempLoop)] > VoxGlobalSettings.solidTypeStart) { activeType = 1; break; }
+                        if (vTypes[activeVoxI - (iDir_downR * tempLoop)] > VoxGlobalSettings.solidTypeStart) { activeType = 1; break; }
 
                         //-X-Z-Y
-                        if (vTypes[activeVoxI - ((1 - vCountYZ - vCountZ) * tempLoop)] > VoxGlobalSettings.solidTypeStart) { activeType = 1; break; }
+                        if (vTypes[activeVoxI - (iDir_downL * tempLoop)] > VoxGlobalSettings.solidTypeStart) { activeType = 1; break; }
                     }
 
                     if (activeType > 0) return;
@@ -771,7 +939,18 @@ namespace zombVoxels
 
                 void CheckVoxIndexWalking()
                 {
+                    //Return if already searched
                     if (vSearched.TryAdd(activeVoxI, activeDirI) == false) return;
+
+                    //Prevent out of bounds
+                    tempVoxI = activeVoxI + (iDir_upL * aiSizeExtended); if (tempVoxI < 0 || tempVoxI > maxVoxIndex) return;
+                    tempVoxI = activeVoxI + (iDir_upR * aiSizeExtended); if (tempVoxI < 0 || tempVoxI > maxVoxIndex) return;
+                    tempVoxI = activeVoxI + (iDir_downR * aiSizeExtended); if (tempVoxI < 0 || tempVoxI > maxVoxIndex) return;
+                    tempVoxI = activeVoxI + (iDir_downL * aiSizeExtended); if (tempVoxI < 0 || tempVoxI > maxVoxIndex) return;
+                    tempVoxI = activeVoxI - (iDir_upL * aiSizeExtended); if (tempVoxI < 0 || tempVoxI > maxVoxIndex) return;
+                    tempVoxI = activeVoxI - (iDir_upR * aiSizeExtended); if (tempVoxI < 0 || tempVoxI > maxVoxIndex) return;
+                    tempVoxI = activeVoxI - (iDir_downR * aiSizeExtended); if (tempVoxI < 0 || tempVoxI > maxVoxIndex) return;
+                    tempVoxI = activeVoxI - (iDir_downL * aiSizeExtended); if (tempVoxI < 0 || tempVoxI > maxVoxIndex) return;
 
                     //Check if voxel is overlapping
                     if (vTypes[activeVoxI] > VoxGlobalSettings.solidTypeStart) return;
@@ -787,28 +966,28 @@ namespace zombVoxels
                         if (vTypes[activeVoxI - (vCountYZ * tempLoop)] > VoxGlobalSettings.solidTypeStart) { activeType = 1; break; }
 
                         //+X+Z-Y
-                        if (vTypes[activeVoxI + ((1 + vCountYZ - vCountZ) * tempLoop)] > VoxGlobalSettings.solidTypeStart) { activeType = 1; break; }
+                        if (vTypes[activeVoxI + (iDir_upL * tempLoop)] > VoxGlobalSettings.solidTypeStart) { activeType = 1; break; }
 
                         //+X+Z+Y
-                        if (vTypes[activeVoxI + ((1 + vCountYZ + vCountZ) * tempLoop)] > VoxGlobalSettings.solidTypeStart) { activeType = 1; break; }
+                        if (vTypes[activeVoxI + (iDir_upR * tempLoop)] > VoxGlobalSettings.solidTypeStart) { activeType = 1; break; }
 
                         //+X-Z+Y
-                        if (vTypes[activeVoxI + ((1 - vCountYZ + vCountZ) * tempLoop)] > VoxGlobalSettings.solidTypeStart) { activeType = 1; break; }
+                        if (vTypes[activeVoxI + (iDir_downR * tempLoop)] > VoxGlobalSettings.solidTypeStart) { activeType = 1; break; }
 
                         //+X-Z-Y
-                        if (vTypes[activeVoxI + ((1 - vCountYZ - vCountZ) * tempLoop)] > VoxGlobalSettings.solidTypeStart) { activeType = 1; break; }
+                        if (vTypes[activeVoxI + (iDir_downL * tempLoop)] > VoxGlobalSettings.solidTypeStart) { activeType = 1; break; }
 
                         //-X+Z-Y
-                        if (vTypes[activeVoxI - ((1 + vCountYZ - vCountZ) * tempLoop)] > VoxGlobalSettings.solidTypeStart) { activeType = 1; break; }
+                        if (vTypes[activeVoxI - (iDir_upL * tempLoop)] > VoxGlobalSettings.solidTypeStart) { activeType = 1; break; }
 
                         //-X+Z+Y
-                        if (vTypes[activeVoxI - ((1 + vCountYZ + vCountZ) * tempLoop)] > VoxGlobalSettings.solidTypeStart) { activeType = 1; break; }
+                        if (vTypes[activeVoxI - (iDir_upR * tempLoop)] > VoxGlobalSettings.solidTypeStart) { activeType = 1; break; }
 
                         //-X-Z+Y
-                        if (vTypes[activeVoxI - ((1 - vCountYZ + vCountZ) * tempLoop)] > VoxGlobalSettings.solidTypeStart) { activeType = 1; break; }
+                        if (vTypes[activeVoxI - (iDir_downR * tempLoop)] > VoxGlobalSettings.solidTypeStart) { activeType = 1; break; }
 
                         //-X-Z-Y
-                        if (vTypes[activeVoxI - ((1 - vCountYZ - vCountZ) * tempLoop)] > VoxGlobalSettings.solidTypeStart) { activeType = 1; break; }
+                        if (vTypes[activeVoxI - (iDir_downL * tempLoop)] > VoxGlobalSettings.solidTypeStart) { activeType = 1; break; }
                     }
 
                     //Do falling
@@ -838,25 +1017,25 @@ namespace zombVoxels
                     bool CheckShit()
                     {
                         //+X+Z-Y
-                        activeType = vTypes[tempVoxI + ((1 + vCountYZ - vCountZ) * aiSizeExtented)]; if (activeType > VoxGlobalSettings.solidTypeStart) { return true; }
+                        activeType = vTypes[tempVoxI + (iDir_upL * aiSizeReduced)]; if (activeType > VoxGlobalSettings.solidTypeStart) { return true; }
                         //+X-Z-Y
-                        activeType = vTypes[tempVoxI + ((1 - vCountYZ - vCountZ) * aiSizeExtented)]; if (activeType > VoxGlobalSettings.solidTypeStart) { return true; }
+                        activeType = vTypes[tempVoxI + (iDir_downL * aiSizeReduced)]; if (activeType > VoxGlobalSettings.solidTypeStart) { return true; }
                         //-X+Z-Y
-                        activeType = vTypes[tempVoxI - ((1 + vCountYZ - vCountZ) * aiSizeExtented)]; if (activeType > VoxGlobalSettings.solidTypeStart) { return true; }
+                        activeType = vTypes[tempVoxI - (iDir_upL * aiSizeReduced)]; if (activeType > VoxGlobalSettings.solidTypeStart) { return true; }
                         //-X-Z-Y
-                        activeType = vTypes[tempVoxI - ((1 - vCountYZ - vCountZ) * aiSizeExtented)]; if (activeType > VoxGlobalSettings.solidTypeStart) { return true; }
+                        activeType = vTypes[tempVoxI - (iDir_downL * aiSizeReduced)]; if (activeType > VoxGlobalSettings.solidTypeStart) { return true; }
 
-                        activeType = vTypes[tempVoxI + aiSizeExtented]; if (activeType > VoxGlobalSettings.solidTypeStart) { return true; }
-                        activeType = vTypes[tempVoxI - aiSizeExtented]; if (activeType > VoxGlobalSettings.solidTypeStart) { return true; }
-                        activeType = vTypes[tempVoxI - (vCountZ * aiSizeExtented)]; if (activeType > VoxGlobalSettings.solidTypeStart) { return true; }
-                        activeType = vTypes[tempVoxI + (vCountYZ * aiSizeExtented)]; if (activeType > VoxGlobalSettings.solidTypeStart) { return true; }
-                        activeType = vTypes[tempVoxI - (vCountYZ * aiSizeExtented)]; if (activeType > VoxGlobalSettings.solidTypeStart) { return true; }
+                        activeType = vTypes[tempVoxI + aiSizeReduced]; if (activeType > VoxGlobalSettings.solidTypeStart) { return true; }
+                        activeType = vTypes[tempVoxI - aiSizeReduced]; if (activeType > VoxGlobalSettings.solidTypeStart) { return true; }
+                        activeType = vTypes[tempVoxI - (vCountZ * aiSizeReduced)]; if (activeType > VoxGlobalSettings.solidTypeStart) { return true; }
+                        activeType = vTypes[tempVoxI + (vCountYZ * aiSizeReduced)]; if (activeType > VoxGlobalSettings.solidTypeStart) { return true; }
+                        activeType = vTypes[tempVoxI - (vCountYZ * aiSizeReduced)]; if (activeType > VoxGlobalSettings.solidTypeStart) { return true; }
 
                         return false;
                     }
 
                     return;
-                    SkipReturnInvalid:;
+                SkipReturnInvalid:;
 
                     //Voxel is valid, add it to the path
                     tempType = vTypes[activeVoxI];
@@ -866,14 +1045,14 @@ namespace zombVoxels
                     AddVoxelToPath();
                 }
 
-                //activeVoxI + ((1 + vCountYZ - vCountZ) * tempLoop)
-                //activeVoxI + ((1 + vCountYZ + vCountZ) * tempLoop)
-                //activeVoxI + ((1 - vCountYZ + vCountZ) * tempLoop)
-                //activeVoxI + ((1 - vCountYZ - vCountZ) * tempLoop)
-                //activeVoxI - ((1 + vCountYZ - vCountZ) * tempLoop)
-                //activeVoxI - ((1 + vCountYZ + vCountZ) * tempLoop)
-                //activeVoxI - ((1 - vCountYZ + vCountZ) * tempLoop)
-                //activeVoxI - ((1 - vCountYZ - vCountZ) * tempLoop)
+                //activeVoxI + (iDir_upL * tempLoop)
+                //activeVoxI + (iDir_upR * tempLoop)
+                //activeVoxI + (iDir_downR * tempLoop)
+                //activeVoxI + (iDir_downL * tempLoop)
+                //activeVoxI - (iDir_upL * tempLoop)
+                //activeVoxI - (iDir_upR * tempLoop)
+                //activeVoxI - (iDir_downR * tempLoop)
+                //activeVoxI - (iDir_downL * tempLoop)
 
                 int SnapToValidVoxelWalking(int snapThis)
                 {

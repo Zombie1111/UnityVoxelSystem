@@ -1,30 +1,34 @@
+//https://github.com/Zombie1111/UnityVoxelSystem
 using System;
 using System.Collections.Generic;
-using System.Threading.Tasks;
-using TMPro;
 using Unity.Burst;
 using Unity.Collections;
 using Unity.Collections.LowLevel.Unsafe;
 using Unity.Jobs;
-using Unity.VisualScripting;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.Jobs;
 
 namespace zombVoxels
 {
+    [DefaultExecutionOrder(100)]
     public class VoxGlobalHandler : MonoBehaviour
     {
         #region VoxelObjectManagement
 
         private VoxSavedData savedVoxData;
         private bool voxEditorIsValid = false;
-        private bool voxRuntimeIsValid = false;
+        [System.NonSerialized] public bool voxRuntimeIsValid = false;
 
         private void Awake()
         {
             if (ValidateVoxelSystem() == false) return;
             SetupVoxelSystem();
+
+#if UNITY_EDITOR
+            //Must be hidden in inspector at runtime because otherwise fps drops to <0.1f if selected
+            if (Application.isPlaying == true) this.hideFlags = HideFlags.HideInInspector;
+#endif
         }
 
         private void OnDestroy()
@@ -69,9 +73,10 @@ namespace zombVoxels
                 newVoxelTrans.Add(trans);
 
             //Voxelize the collider if needed
+            if (savedVoxData == null && ValidateVoxelSystem() == false) return;
             if (savedVoxData.colIdToVoxObjectSave.ContainsKey(colId) == true) return;
 
-            var voxObjSave = VoxHelpFunc.VoxelizeCollider(col, objVoxType);
+            var voxObjSave = VoxHelpFunc.VoxelizeCollider(col, ref voxWorld, objVoxType);
             savedVoxData.AddVoxObject(colId, voxObjSave);
 #if UNITY_EDITOR
             if (Application.isPlaying == true)
@@ -123,12 +128,12 @@ namespace zombVoxels
         [Header("Configuration")]
         [SerializeField] private Vector3 worldScaleAxis = Vector3.one;
         [SerializeField][Range(1, 10)] private int framesBetweenVoxelUpdate = 2;
-#if UNITY_EDITOR
-        [SerializeField] private bool drawEditorGizmo = true;
-#endif
 
         [Space()]
         [Header("Debug")]
+#if UNITY_EDITOR
+        [SerializeField] private bool drawEditorGizmo = true;
+#endif
         [SerializeField] private SerializableDictionary<Transform, VoxTransform.VoxTransformSavable> transToColIds = new();
         private HashSet<Transform> newVoxelTrans = new();
         private HashSet<int> newVoxelObj = new();
@@ -189,7 +194,7 @@ namespace zombVoxels
 
         public void SetupVoxelSystem()
         {
-            if (voxRuntimeIsValid == true) ClearRuntimeVoxelSystem();
+            if (voxRuntimeIsValid == true) ClearRuntimeVoxelSystem();//Why do we clear and rebuild if already built?
 
             //Allocate ComputeVoxelObjects_work
             transColIds.Clear();
@@ -229,6 +234,9 @@ namespace zombVoxels
             }
 
             voxRuntimeIsValid = true;
+
+            //Invoke on build voxel system
+            OnSetupVoxelSystem?.Invoke();
         }
 
         /// <summary>
@@ -246,6 +254,9 @@ namespace zombVoxels
                 globalHasReadAccess = false;
                 OnGlobalReadAccessStop?.Invoke();
             }
+
+            //Invoke clear voxelSystem
+            OnClearVoxelSystem?.Invoke();
 
             //Dispose voxel transforms
             int transCount = transColIds.Count;
@@ -318,23 +329,23 @@ namespace zombVoxels
                 voxT.colIds_ptr = NativeArrayUnsafeUtility.GetUnsafeReadOnlyPtr(colIds);
                 voxT.colIds_lenght = colIds.Length;
                 cvo_job.voxTranss[voxTrans.transIndex] = voxT;
-            }
-            else
-            {
-                //Add new tranform to voxel system
-                transColIds.Add(colIds);
-                voxelObjTranss.Add(trans);
-                gtd_job.transOldLocValue.Add(0.0f);
-                gtd_job.voxTranssLToWPrev.Add(Matrix4x4.zero);
-                cvo_job.voxTranss.Add(new()
-                {
-                    colIds_ptr = NativeArrayUnsafeUtility.GetUnsafeReadOnlyPtr(colIds),
-                    colIds_lenght = colIds.Length,
-                    isAppliedToWorld = false,
-                    isActive = true
-                });
+
+                return voxTrans.transIndex;
             }
 
+            //Add new tranform to voxel system
+            transColIds.Add(colIds);
+            voxelObjTranss.Add(trans);
+            gtd_job.transOldLocValue.Add(0.0f);
+            gtd_job.voxTranssLToWPrev.Add(Matrix4x4.zero);
+            cvo_job.voxTranss.Add(new()
+            {
+                colIds_ptr = NativeArrayUnsafeUtility.GetUnsafeReadOnlyPtr(colIds),
+                colIds_lenght = colIds.Length,
+                isAppliedToWorld = false,
+                isActive = true
+            });
+            
             return transColIds.Count - 1;
         }
 
@@ -375,13 +386,13 @@ namespace zombVoxels
         /// Returns a valid VoxGlobalHandler, returns null if no valid VoxGlobalHandler is found
         /// </summary>
         /// <returns></returns>
-        public static VoxGlobalHandler TryGetValidGlobalHandler()
+        public static VoxGlobalHandler TryGetValidGlobalHandler(bool canLogError = true)
         {
             var vHandler = GameObject.FindAnyObjectByType<VoxGlobalHandler>(FindObjectsInactive.Exclude);
 
             if (vHandler == null)
             {
-                Debug.LogError("There is no active VoxGlobalHandler in the current scene");
+                if (canLogError == true) Debug.LogError("There is no active VoxGlobalHandler in the current scene");
                 return null;
             }
 
@@ -400,6 +411,10 @@ namespace zombVoxels
         public event Event_OnGlobalReadAccessStart OnGlobalReadAccessStart;
         public delegate void Event_OnGlobalReadAccessStop();
         public event Event_OnGlobalReadAccessStop OnGlobalReadAccessStop;
+        public delegate void Event_OnSetupVoxelSystem();
+        public event Event_OnSetupVoxelSystem OnSetupVoxelSystem;
+        public delegate void Event_OnClearVoxelSystem();
+        public event Event_OnClearVoxelSystem OnClearVoxelSystem;
         private bool wannaUpdateVoxels = true;
         private int framesSinceUpdatedVoxels = 69420;
 
@@ -433,14 +448,6 @@ namespace zombVoxels
             }
 
             //Add new transforms and objects to voxel system
-            foreach (var newTrans in newVoxelTrans)
-            {
-                var voxT = transToColIds[newTrans];
-                voxT.transIndex = AddTransformToVoxelSystem(newTrans, voxT);
-            }
-
-            newVoxelTrans.Clear();
-
             foreach (var newObj in newVoxelObj)
             {
                 var voxO = savedVoxData.colIdToVoxObjectSave[newObj];
@@ -449,6 +456,14 @@ namespace zombVoxels
             }
 
             newVoxelObj.Clear();
+
+            foreach (var newTrans in newVoxelTrans)
+            {
+                var voxT = transToColIds[newTrans];
+                voxT.transIndex = AddTransformToVoxelSystem(newTrans, voxT);
+            }
+
+            newVoxelTrans.Clear();
 
             //Set transforms active status
             foreach (var transToSet in transToSetVoxActiveStatus)
@@ -552,7 +567,7 @@ namespace zombVoxels
         public struct ComputeVoxelWorld_work : IJob
         {
             public NativeList<VoxTransform> voxTranss;
-            public NativeHashMap<int, VoxObject> colIdToVoxObject;
+            public NativeParallelHashMap<int, VoxObject> colIdToVoxObject;
             public NativeQueue<VoxTransform.ToCompute> voxTranssToCompute;
             public NativeReference<VoxWorld> voxWorld;
 
@@ -610,8 +625,6 @@ namespace zombVoxels
 #if UNITY_EDITOR
         private Vector3 oldWorldScaleAxis = Vector3.zero;
         [System.NonSerialized] public bool debugDoUpdateVisualVoxels = false;
-        public Transform debugTrams;
-        public Transform debugTramsB;
 
         private void OnDrawGizmos()
         {
@@ -706,7 +719,7 @@ namespace zombVoxels
                 return;
             }
 
-            float maxDis = VoxGlobalSettings.voxelSizeWorld * 50.0f;
+            float maxDis = VoxGlobalSettings.voxelSizeWorld * 25.0f;
             var view = SceneView.currentDrawingSceneView;
             if (view == null) return;
             Vector3 sceneCam = view.camera.ViewportToWorldPoint(view.cameraViewport.center);
@@ -732,7 +745,7 @@ namespace zombVoxels
     {
         private static readonly string[] hiddenFields = new string[]
         {
-                "m_Script", "transToColIds", "worldScaleAxis"
+                "m_Script", "transToColIds"
         };
 
         public override void OnInspectorGUI()
@@ -743,24 +756,9 @@ namespace zombVoxels
 
             EditorGUILayout.Space();
 
-            DrawPropertiesExcluding(serializedObject, hiddenFields);
-            if (Application.isPlaying == false) EditorGUILayout.PropertyField(serializedObject.FindProperty("worldScaleAxis"), true);
-            else
-            {
-                if (GUILayout.Button("Toggle Visual Voxels") == true)
-                {
-                    yourScript.debugDoUpdateVisualVoxels = !yourScript.debugDoUpdateVisualVoxels;
-                }
+            DrawPropertiesExcluding(serializedObject, hiddenFields);//Script is not visible at runtime, so we dont need to disable stuff at runtime
 
-                EditorGUILayout.HelpBox("Properties cannot be edited at runtime", MessageType.Info);
-            }
-
-            GUI.enabled = false;
-            if (Application.isPlaying == true)
-            {
-                EditorGUILayout.PropertyField(serializedObject.FindProperty("worldScaleAxis"), true);
-            }
-
+            GUI.enabled = false;            
             EditorGUILayout.PropertyField(serializedObject.FindProperty("transToColIds"), true);
             GUI.enabled = true;
 
