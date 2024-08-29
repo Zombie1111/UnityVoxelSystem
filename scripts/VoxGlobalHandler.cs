@@ -634,7 +634,8 @@ namespace zombVoxels
                 oldWorldScaleAxis = worldScaleAxis;
             }
 
-            if (voxEditorIsValid == false || drawEditorGizmo == false) return;
+            if (voxEditorIsValid == false) return;
+            if (drawEditorGizmo == false) goto SkipDrawVoxelBounds;
 
             //Draw world voxel bounds
             Vector3 size = new Vector3(voxWorld.vCountX, voxWorld.vCountY, voxWorld.vCountZ) * VoxGlobalSettings.voxelSizeWorld;
@@ -642,6 +643,8 @@ namespace zombVoxels
             Gizmos.DrawWireCube(size * 0.5f, size + (Vector3.one * 0.1f));
             Gizmos.color = Color.red;
             Gizmos.DrawCube(size * 0.5f, size);
+
+            SkipDrawVoxelBounds:;
 
             //Draw debug voxels
             if (debugDoUpdateVisualVoxels == true && globalHasReadAccess == true)
@@ -660,36 +663,6 @@ namespace zombVoxels
                     Gizmos.DrawCube(draw.pos, voxSize);
                 }
             }
-
-            //Debug stuff
-            //if (Application.isPlaying == true)
-            //{
-            //    Vector3 pos = debugTrams.position;
-            //    int vI = 0;
-            //    VoxHelpBurst.PosToWVoxIndex(ref pos, ref vI, ref voxWorld);
-            //    VoxHelpBurst.WVoxIndexToPos(ref vI, ref pos, ref voxWorld);
-            //    Gizmos.DrawCube(pos, Vector3.one * VoxGlobalSettings.voxelSizeWorld);
-            //
-            //    byte result = 0;
-            //    Debug_toggleTimer();
-            //    for (int i = 0; i < 10000; i++)
-            //    {
-            //        result = IsVoxelValidClimb(vI, 6);
-            //    }
-            //    Debug_toggleTimer();
-            //    Debug.Log(result);
-            //
-            //    Vector3 posB = debugTramsB.position;
-            //    int vIB = 0;
-            //    VoxHelpBurst.PosToWVoxIndex(ref posB, ref vIB, ref voxWorld);
-            //    VoxHelpBurst.WVoxIndexToPos(ref vIB, ref posB, ref voxWorld);
-            //    Gizmos.DrawCube(posB, Vector3.one * VoxGlobalSettings.voxelSizeWorld);
-            //
-            //    Gizmos.DrawLine(pos, posB);
-            //    ushort voxDis = 0;
-            //    VoxHelpBurst.GetVoxelCountBetweenWVoxIndexs(vI, vIB, ref voxDis, ref voxWorld);
-            //    Debug.Log("Actual dis: " + Vector3.Distance(pos, posB) + " vox dis: " + (voxDis * VoxGlobalSettings.voxelSizeWorld));
-            //}
         }
 
         private List<VoxHelpBurst.CustomVoxelData> voxsToDraw = new();
@@ -719,7 +692,7 @@ namespace zombVoxels
                 return;
             }
 
-            float maxDis = VoxGlobalSettings.voxelSizeWorld * 25.0f;
+            float maxDis = VoxGlobalSettings.voxelSizeWorld * 25.0f;//This is how far voxels will be rendered
             var view = SceneView.currentDrawingSceneView;
             if (view == null) return;
             Vector3 sceneCam = view.camera.ViewportToWorldPoint(view.cameraViewport.center);
