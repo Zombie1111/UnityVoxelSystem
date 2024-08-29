@@ -4,16 +4,17 @@
 ## Overview
 A multithreaded voxel system for Unity designed to be an efficient way to access a rough reprisentation of the world´s geometry. The primary purpose of this project is to provide a easy way to run heavy tasks that require knowledge of the world’s geometry on a background thread. It’s particularly useful for tasks like pathfinding and finding clear positions where some NPCs can spawn.
 
--Gif showing adding, creating + moving voxel objects-
+![Gif showing adding, creating and moving voxel objects](https://media.giphy.com/media/yaVuPs1yBckdq5tBh3/giphy.gif)
 
--Gif showing pathfinding-
+![Gif showing pathfinding](https://media.giphy.com/media/PvyUHqM5OGjFCEHIWR/giphy.gif)
 
 ## Key Features
 <ul>
 <li>Creates a voxelized version of all colliders in your scene</li>
+<li>Multithreading and burst compiled code, thousands of colliders has minor cost</li>
 <li>Safe read access to voxel data from any thread using unity JobSystem</li>
-<li>Baking voxelObjects in editor for faster load time</li>
-<li>Baking, Adding and Removing voxel objects at runtime</li>
+<li>Prebake voxelObjects in editor for faster load time</li>
+<li>Baking, Adding and Removing voxelObjects at runtime</li>
 <li>Identical colliders are stored as one voxelObject, saving both memory and baking time</li>
 <li>All voxels can be in 255 different states, allowing you to categorize colliders and more</li>
 </ul>
@@ -24,7 +25,7 @@ A multithreaded voxel system for Unity designed to be an efficient way to access
 <li>Unity 2023.2.20f1 (Built-in)</li>
 <li>Burst 1.8.17</li>
 <li>Collections 2.1.4</li>
-<li>Allow unsafe code</li>
+<li>Allow unsafe code (Because using pointers)</li>
 </ul>
 
 **General Setup**
@@ -39,8 +40,9 @@ A multithreaded voxel system for Unity designed to be an efficient way to access
 </ol>
 
 ## Documentation
-Most parameters have tooltips in the unity inspector and a lot of the functions are documented.
-See the demo scene for pratical exampels
+Most parameters have tooltips in the unity inspector and a lot of the functions are commented.
+
+See the _demo folder for pratical exampels
 
 ## Technical details
 
