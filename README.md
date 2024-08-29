@@ -26,14 +26,13 @@ A multithreaded voxel system for Unity designed to be an efficient way to access
 </ul>
 
 **General Setup**
-<ul>
-**1.&nbsp;&nbsp;** Download and copy the Resources, plugins, scripts and _demo (optional) folders into an empty folder inside your Assets folder
-**2.&nbsp;&nbsp;** Create a new empty gameobject and add the VoxGlobalHandler script to it
-**3.&nbsp;&nbsp;** Make sure the worldspace bounding box of all colliders that should be voxelized are inside the yellow wireframe box. You can change the WorldScaleAxis parameter on the VoxGlobalHandler script to make the proccess easier or open the VoxGlobalSettings script and change the voxelSizeWorld and voxelAxisCount values.
-**4.&nbsp;&nbsp;** Add the VoxParent script to gameobjects that will be cloned at runtime or if you want more configuration options
-**5.&nbsp;&nbsp;** Build the scene, Tools->Voxel System->Build Active Scene
-**6.&nbsp;&nbsp;** Enter playmode and a voxelized version of all colliders should exist, Tools->Voxel System->Toggle Draw Editor Voxels
-</ul>
+
+**&nbsp;&nbsp;&nbsp;1.&nbsp;** Download and copy the Resources, plugins, scripts and _demo (optional) folders into an empty folder inside your Assets folder <br />
+**&nbsp;&nbsp;&nbsp;2.&nbsp;** Create a new empty gameobject and add the VoxGlobalHandler script to it <br />
+**&nbsp;&nbsp;&nbsp;3.&nbsp;** Make sure the worldspace bounding box of all colliders that should be voxelized are inside the yellow wireframe box. You can change the WorldScaleAxis parameter on the VoxGlobalHandler script to make the proccess easier or open the VoxGlobalSettings script and change the voxelSizeWorld and voxelAxisCount values <br />
+**&nbsp;&nbsp;&nbsp;4.&nbsp;** Add the VoxParent script to gameobjects that will be cloned at runtime or if you want more configuration options <br />
+**&nbsp;&nbsp;&nbsp;5.&nbsp;** Build the scene, Tools->Voxel System->Build Active Scene <br />
+**&nbsp;&nbsp;&nbsp;6.&nbsp;** Enter playmode and a voxelized version of all colliders should exist, Tools->Voxel System->Toggle Draw Editor Voxels <br />
 
 ## Documentation
 Most parameters have tooltips in the unity inspector and a lot of the functions are documented.
