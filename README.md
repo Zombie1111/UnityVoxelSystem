@@ -42,7 +42,7 @@ A multithreaded voxel system for Unity designed to be an efficient way to access
 ## Documentation
 Most functions are documented and all parameters visible in the unity inspector have tooltips
 
-See the `_demo/` folder for pratical exampels
+The `_demo/` folder contains pratical exampels
 
 ## Technical details
 **VoxelObjects**
