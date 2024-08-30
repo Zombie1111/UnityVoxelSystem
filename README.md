@@ -44,7 +44,7 @@ Most functions are documented and all parameters visible in the unity inspector 
 
 The `_demo/` folder contains pratical exampels
 
-## Technical details
+## Technical Details
 **VoxelObjects**
 
 A voxelObject is a voxelized version of a collider, they are stored in a public dictorary and uses a hash generated from the collider type, bounds and vertex count as key. When baking a new collider a local voxel grid is created inside the collider worldspace bounding box. The index of all local voxels that are overlapping with the collider are added to the voxelObject (See `VoxelizeCollider()` in `scripts/VoxHelpFunc.cs`). The voxelObject stores the index of all overlapping local voxels and the local voxel grid dimensions. By only storing the index we can save 64 bits per overlapping voxel and still be able to get the world position of each voxel using the local grid dimensions and transform localToWorld matrix.
