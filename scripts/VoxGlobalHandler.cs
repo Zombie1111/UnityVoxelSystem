@@ -126,8 +126,10 @@ namespace zombVoxels
         #region VoxelWorldManagement
 
         [Header("Configuration")]
-        [SerializeField] private Vector3 worldScaleAxis = Vector3.one;
-        [SerializeField][Range(1, 10)] private int framesBetweenVoxelUpdate = 2;
+        [SerializeField][Tooltip("The scale of the global voxel grid," +
+            " the scale will be normalized when setting up global voxel grid")] private Vector3 worldScaleAxis = Vector3.one;
+        [SerializeField][Range(1, 10)][Tooltip("How many frames inbetween OnGlobalReadAccessStart and OnGlobalReadAccessStop is invoked," +
+            " higher value gives your script more time to compute in the background")] private int framesBetweenVoxelUpdate = 4;
 
         [Space()]
         [Header("Debug")]
@@ -734,6 +736,8 @@ namespace zombVoxels
             GUI.enabled = false;            
             EditorGUILayout.PropertyField(serializedObject.FindProperty("transToColIds"), true);
             GUI.enabled = true;
+
+            EditorGUILayout.HelpBox("The VoxelGlobalHandler script will be hidden in the inspector at runtime due to weird performance issues otherwise!", MessageType.Info);
 
             //Apply changes
             serializedObject.ApplyModifiedProperties();

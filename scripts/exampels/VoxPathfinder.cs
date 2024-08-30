@@ -15,8 +15,9 @@ namespace zombVoxels
     {
         #region Configuration
 
-        [SerializeField] private int maxVoxelsToSearch = 1000;
-        [SerializeField] private int maxVoxelsSearched = 32000;
+        [Tooltip("How many voxels can be searched before giving up on finding a valid path")] [SerializeField] private int maxVoxelsSearched = 10000;
+        [Tooltip("The defualt lenght of some nativeContainers, not very important")] [SerializeField] private int maxVoxelsToSearch = 1000;
+        [Tooltip("How much more expensive should it be to travel on a voxel of type X")]
         [SerializeField] private SerializableDictionary<byte, float> voxTypeCostMultiplier = new();
 
         #endregion Configuration
@@ -93,7 +94,7 @@ namespace zombVoxels
                 _toSearchIndex = new(maxVoxelsToSearch, Allocator.Persistent),
                 _maxVoxelsSearched = new(maxVoxelsSearched, Allocator.Persistent),
                 _voxTypeToMultiply = voxTypeCostMultiplier.ToNativeHashMap(Allocator.Persistent),
-                _resultPath = new(maxVoxelsToSearch / 100, Allocator.Persistent)
+                _resultPath = new(maxVoxelsToSearch / 10, Allocator.Persistent)
             };
         }
 
@@ -139,9 +140,9 @@ namespace zombVoxels
         {
             [System.NonSerialized] public int startVoxIndex;
             [System.NonSerialized] public int endVoxIndex;
-            public byte radius;
-            public byte snapRadius;
-            public PathType pathType;
+            [Tooltip("The radius of the character, min distance from walls (In voxel units)")] public byte radius;
+            [Tooltip("The maximum distance the path can snap (In voxel units)")] public byte snapRadius;
+            [Tooltip("The path navigation mode")] public PathType pathType;
         }
 
         public struct PathPendingRequest

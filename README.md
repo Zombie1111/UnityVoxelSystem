@@ -40,9 +40,9 @@ A multithreaded voxel system for Unity designed to be an efficient way to access
 </ol>
 
 ## Documentation
-Most parameters have tooltips in the unity inspector and a lot of the functions are commented.
+Most functions are documented and all parameters visible in the unity inspector have tooltips
 
-See the `_demo` folder for pratical exampels
+See the `_demo/` folder for pratical exampels
 
 ## Technical details
 **VoxelObjects**
@@ -55,7 +55,7 @@ All voxelObjects are added to the global voxel grid, it consumes 24 bits per vox
 
 **Execution Order**
 
-![Image of execution order diagram](https://i.postimg.cc/Bvr7p1S2/image.png)
+![Image of execution order diagram](https://i.postimg.cc/1XMjDCFp/image-2.png)
 
 ## License
 The original code and assets created for this project are licensed under CC BY-NC 4.0 - See the `LICENSE` file for more details.

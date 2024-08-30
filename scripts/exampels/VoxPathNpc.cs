@@ -8,13 +8,14 @@ namespace zombVoxels
     {
         #region SetupPathNpc
 
-        [SerializeField] private bool discardPendingUpdatesOnRequest = true;
+        [Tooltip("Should pending path requests be discarded when a new request is made?")] [SerializeField] private bool discardPendingUpdatesOnRequest = true;
         public VoxPathfinder.PathRequest pathProperties = new();
-        [SerializeField] private VoxPathfinder pathfinder = null;
-        [SerializeField] private float pathSimplificationTolerance = 0.1f;
-        [SerializeField] private float pathSnapRayRadius = 0.5f;
-        [SerializeField] private float pathSnapRayLenght = 5.0f;
-        [SerializeField] private LayerMask pathSnapMask = Physics.AllLayers;
+        [Tooltip("The pathfinder to use, assigned automatically if left unassigned in editor")] [SerializeField] private VoxPathfinder pathfinder = null;
+        [Tooltip("If <= 0.0f, no path simplification")] [SerializeField] private float pathSimplificationTolerance = 0.1f;
+
+        [Tooltip("If > 0.0f, the path will be snapped to the ground if ground exist within this distance")][SerializeField] private float pathSnapRayLenght = 0.0f;
+        [Tooltip("The maximum radius of the pathSnap ray, unused if pathSnapRayLenght <= 0.0f")][SerializeField] private float pathSnapRayRadius = 0.5f;
+        [Tooltip("Layermask for the pathSnap ray, unused if pathSnapRayLenght <= 0.0f")] [SerializeField] private LayerMask pathSnapMask = Physics.AllLayers;
 
 #if UNITY_EDITOR
         [SerializeField] private DebugMode debugMode = DebugMode.None;
@@ -156,18 +157,18 @@ namespace zombVoxels
                 }
             }
 
-            ////Snap path to ground
-            //if (pathSnapRayRadius > 0.0f)
-            //{
-            //    for (int i = 0; i < pathResultPos.Count; i++)
-            //    {
-            //        var nHit = VoxHelpFunc.WideRaycast(pathResultPos[i], -pathResultNor[i], pathSnapRayLenght, pathSnapMask, pathSnapRayRadius, 0.05f);
-            //        if (nHit.collider == null) continue;
-            //
-            //        pathResultPos[i] = nHit.point;
-            //        pathResultNor[i] = nHit.normal;
-            //    }
-            //}
+            //Snap path to ground
+            if (pathSnapRayLenght > 0.0f)
+            {
+                for (int i = 0; i < pathResultPos.Count; i++)
+                {
+                    var nHit = VoxHelpFunc.WideRaycast(pathResultPos[i], -pathResultNor[i], pathSnapRayLenght, pathSnapMask, pathSnapRayRadius, 0.05f);
+                    if (nHit.collider == null) continue;
+            
+                    pathResultPos[i] = nHit.point;
+                    pathResultNor[i] = nHit.normal;
+                }
+            }
 
 #if UNITY_EDITOR
             DoPathDebug(true);

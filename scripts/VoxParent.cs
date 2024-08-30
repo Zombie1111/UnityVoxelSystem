@@ -8,18 +8,19 @@ using zombVoxels;
 public class VoxParent : MonoBehaviour
 {
     [Header("Voxel Settings")]
-    public bool buildOnStart = true;
-    public byte voxelType = VoxGlobalSettings.defualtType;
-    public Collider voxelColliderOverwrite = null;
+    [Tooltip("If true the voxelObject will not be baked in editor")] public bool buildOnStart = true;
+    [Tooltip("The type all voxels that are from this parent has, can be used to categorize voxels and more," +
+        " see solidTypeStart in VoxGlobalSettings.cs")] public byte voxelType = VoxGlobalSettings.defualtType;
+    [Tooltip("If assigned, all affected colliders will use this collider as voxelObject")] public Collider voxelColliderOverwrite = null;
 
     [Space]
     [Header("Collider Settings")]
-    public bool includeInative = false;
-    public bool includeTriggers = false;
-    public bool ignoreSelf = false;
-    public bool ignoreChildren = false;
-    public bool affectSelf = true;
-    public bool affectChildren = true;
+    [Tooltip("Should the voxParent settings affect this transform?")] public bool affectSelf = true;
+    [Tooltip("Should the voxParent settings affect children transforms?")] public bool affectChildren = true;
+    [Tooltip("If false, inactive colliders wont be voxelized")] public bool includeInative = false;
+    [Tooltip("If false, colliders marked as trigger wont be voxelized")] public bool includeTriggers = false;
+    [Tooltip("If true, colliders on this transform wont be voxelized")] public bool ignoreSelf = false;
+    [Tooltip("If true, colliders on children wont be voxelized")] public bool ignoreChildren = false;
 
     [Space]
     [Header("Debug")]
