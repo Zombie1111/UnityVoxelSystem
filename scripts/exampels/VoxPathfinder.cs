@@ -1,11 +1,10 @@
 //https://github.com/Zombie1111/UnityVoxelSystem
-using System;
-using System.Collections;
 using System.Collections.Generic;
 using Unity.Burst;
 using Unity.Collections;
 using Unity.Jobs;
 using Unity.Mathematics;
+using UnityEditor;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -1094,6 +1093,30 @@ namespace zombVoxels
             {
                 stopwatch.Stop();
                 Debug.Log(note + " time: " + stopwatch.Elapsed.TotalMilliseconds + "ms");
+            }
+        }
+
+        //########################Custom Editor######################################
+        [CustomEditor(typeof(VoxPathfinder))]
+        public class YourScriptEditor : Editor
+        {
+            private static readonly string[] hiddenFields = new string[]
+            {
+                "m_Script"
+            };
+
+            public override void OnInspectorGUI()
+            {
+                serializedObject.Update();
+
+                EditorGUILayout.Space();
+
+                DrawPropertiesExcluding(serializedObject, hiddenFields);//Script is not visible at runtime, so we dont need to disable stuff at runtime
+                if (Application.isPlaying == true)
+                    EditorGUILayout.HelpBox("Changes made at runtime is likely to not have any affect!", MessageType.Info);
+
+                //Apply changes
+                serializedObject.ApplyModifiedProperties();
             }
         }
 #endif

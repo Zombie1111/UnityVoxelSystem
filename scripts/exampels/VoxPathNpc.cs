@@ -11,7 +11,7 @@ namespace zombVoxels
         [Tooltip("Should pending path requests be discarded when a new request is made?")] [SerializeField] private bool discardPendingUpdatesOnRequest = true;
         public VoxPathfinder.PathRequest pathProperties = new();
         [Tooltip("The pathfinder to use, assigned automatically if left unassigned in editor")] [SerializeField] private VoxPathfinder pathfinder = null;
-        [Tooltip("If <= 0.0f, no path simplification")] [SerializeField] private float pathSimplificationTolerance = 0.1f;
+        [Tooltip("If <= 0.0f, no path simplification")] [SerializeField] private float pathSimplificationTolerance = 0.6f;
 
         [Tooltip("If > 0.0f, the path will be snapped to the ground if ground exist within this distance")][SerializeField] private float pathSnapRayLenght = 0.0f;
         [Tooltip("The maximum radius of the pathSnap ray, unused if pathSnapRayLenght <= 0.0f")][SerializeField] private float pathSnapRayRadius = 0.5f;

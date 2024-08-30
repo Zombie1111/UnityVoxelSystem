@@ -127,7 +127,7 @@ namespace zombVoxels
 
         [Header("Configuration")]
         [SerializeField][Tooltip("The scale of the global voxel grid," +
-            " the scale will be normalized when setting up global voxel grid")] private Vector3 worldScaleAxis = Vector3.one;
+            " the scale will be normalized when setting up global voxel grid")] private Vector3 worldScaleAxis = Vector3.one - (Vector3.up * 0.5f);
         [SerializeField][Range(1, 10)][Tooltip("How many frames inbetween OnGlobalReadAccessStart and OnGlobalReadAccessStop is invoked," +
             " higher value gives your script more time to compute in the background")] private int framesBetweenVoxelUpdate = 4;
 
@@ -651,7 +651,6 @@ namespace zombVoxels
             //Draw debug voxels
             if (debugDoUpdateVisualVoxels == true && globalHasReadAccess == true)
             {
-                //debugDoUpdateVisualVoxels = false;
                 Debug_updateVisualVoxels();
             }
 

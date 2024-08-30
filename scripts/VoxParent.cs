@@ -40,8 +40,6 @@ public class VoxParent : MonoBehaviour
         {
             serializedObject.Update();
 
-            VoxParent yourScript = (VoxParent)target;
-
             EditorGUILayout.Space();
 
             DrawPropertiesExcluding(serializedObject, hiddenFields);

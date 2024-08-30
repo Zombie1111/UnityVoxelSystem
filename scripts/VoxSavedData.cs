@@ -1,6 +1,4 @@
 //https://github.com/Zombie1111/UnityVoxelSystem
-using System.Collections.Generic;
-using Unity.Collections;
 using UnityEditor;
 using UnityEngine;
 namespace zombVoxels

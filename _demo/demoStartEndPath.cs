@@ -1,9 +1,7 @@
-using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 using zombVoxels;
 
-public class demoStartEndPath : MonoBehaviour
+public class DemoStartEndPath : MonoBehaviour
 {
     [SerializeField] private Transform pathStart;
     [SerializeField] private Transform pathEnd;

@@ -7,7 +7,6 @@ using Unity.Collections;
 using System.Linq;
 using Unity.Collections.LowLevel.Unsafe;
 using System;
-using Unity.Mathematics;
 
 namespace zombVoxels
 {
@@ -116,20 +115,6 @@ namespace zombVoxels
             yDirW = objLToWNow.MultiplyVector(voxObject.yDirL) * VoxGlobalSettings.voxelSizeWorld;
             zDirW = objLToWNow.MultiplyVector(voxObject.zDirL) * VoxGlobalSettings.voxelSizeWorld;
 
-            ////Check if out of bounds
-            //Vector3 maxW = minW + xDirW + yDirW + zDirW;
-            //Vector3 worldMax = new Vector3(voxWorld.vCountX, voxWorld.vCountY, voxWorld.vCountZ) * VoxGlobalSettings.voxelSizeWorld;
-            //
-            //if (minW.x < 0 || minW.y < 0 || minW.z < 0
-            //    || maxW.x > worldMax.x || maxW.y > worldMax.y || maxW.z > worldMax.z
-            //    
-            //    || maxW.x < 0 || maxW.y < 0 || maxW.z < 0//Min is not garanteed to be min in worldspace
-            //    || minW.x > worldMax.x || minW.y > worldMax.y || minW.z > worldMax.z)
-            //{
-            //    voxTrans.isAppliedToWorld = false;
-            //    return;
-            //}
-
             //Apply voxels to worldVoxels
             foreach (int vox in voxs)
             {
@@ -174,12 +159,6 @@ namespace zombVoxels
         [BurstCompile]
         public static void GetVoxelCountBetweenWVoxIndexs(int voxA, int voxB, ref ushort resultCount, ref VoxWorld voxWorld)
         {
-            //resultCount = (ushort)math.abs((voxA % voxWorld.vCountZ) - (voxB % voxWorld.vCountZ));
-            //voxA /= voxWorld.vCountZ;
-            //voxB /= voxWorld.vCountZ;
-            //resultCount += (ushort)(math.abs((voxA % voxWorld.vCountY) - (voxB % voxWorld.vCountY))
-            //    + math.abs((voxA / voxWorld.vCountY) - (voxB / voxWorld.vCountY)));
-
             //Get Manhattan distance
             int tempReminderA = voxA % (voxWorld.vCountY * voxWorld.vCountZ);
             int tempReminderB = voxB % (voxWorld.vCountY * voxWorld.vCountZ);
@@ -324,8 +303,6 @@ namespace zombVoxels
                         {
                             if (hitCols[i] != col) continue;
 
-                            //voxelPoss.Add(colWToL.MultiplyPoint3x4(voxPos));
-                            //voxs.Add(nextVoxId);
                             voxs.Add(nextVoxId);
                             break;
                         }
@@ -341,7 +318,6 @@ namespace zombVoxels
 
             return new()
             {
-                //voxs = voxs.ToNativeHashSet(Allocator.Persistent),
                 voxs = voxs.ToArray(),
                 vCountYZ = vCountY * vCountZ,
                 vCountZ = vCountZ,
@@ -350,7 +326,6 @@ namespace zombVoxels
                 zDirL = colWToL.MultiplyVector(Vector3.forward),
                 minL = colWToL.MultiplyPoint3x4(bStart),
                 voxType = colVoxType,
-                //objIndex = -1//We assign this later when we actually add the real voxelObject
             };
         }
 
@@ -382,36 +357,11 @@ namespace zombVoxels
             return points;
         }
 
+        /// <summary>
+        /// Returns N random directions that stays within a cone with the given normal and radius
+        /// </summary>
         public static List<Vector3> GetRandomConeDirections(int n, Vector3 center, Vector3 normal, float radius, float alpha = 0, bool geodesic = false)
         {
-            //float phi = (1 + Mathf.Sqrt(5)) / 2; // golden ratio
-            //float angle_stride = 360f * phi;
-            //
-            //int b = (int)(alpha * Mathf.Sqrt(n));  // number of boundary points
-            //
-            //List<Vector3> points = new();
-            //
-            //// Get two vectors perpendicular to the normal
-            //Vector3 tangent = Vector3.Cross(normal, Vector3.up).normalized;
-            //if (tangent == Vector3.zero) // In case normal is directly up or down
-            //{
-            //    tangent = Vector3.Cross(normal, Vector3.forward).normalized;
-            //}
-            //Vector3 bitangent = Vector3.Cross(normal, tangent).normalized;
-            //
-            //for (int k = 0; k < n; k++)
-            //{
-            //    float r = k > n - b ? 1 : Mathf.Sqrt(k - 0.5f) / Mathf.Sqrt(n - (b + 1) / 2);
-            //    float theta = geodesic ? k * 360f * phi : k * angle_stride;
-            //    float x = r * Mathf.Cos(theta * Mathf.Deg2Rad) * radius;
-            //    float y = r * Mathf.Sin(theta * Mathf.Deg2Rad) * radius;
-            //
-            //    // Convert the 2D point to 3D
-            //    points.Add((x * tangent + y * bitangent).normalized);
-            //}
-            //
-            //return points;
-
             List<Vector3> dirs = GetRandomPointsInCircle(n, center + normal, normal, radius, alpha, geodesic);
             
             for (int i = 0; i < n; i++)
@@ -709,20 +659,6 @@ namespace zombVoxels
             }
 
             return didFind;
-
-            //float bestDis = float.MaxValue;
-            //surfacePos = pos;
-            //surfaceNor = nor;
-            //
-            //foreach (Vector3 dir in GetSphereDirections(resolution))
-            //{
-            //    if (Physics.Raycast(pos, dir, out RaycastHit nHit, maxDis, mask, QueryTriggerInteraction.Ignore) == false) continue;
-            //    if (nHit.distance > bestDis) continue;
-            //
-            //    bestDis = nHit.distance;
-            //    surfacePos = nHit.point;
-            //    surfaceNor = nHit.normal;
-            //}
         }
 
         /// <summary>

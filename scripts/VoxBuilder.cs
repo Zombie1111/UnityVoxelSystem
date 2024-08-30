@@ -10,8 +10,6 @@ namespace zombVoxels
 {
     public static class VoxBuilder
     {
-        //Test later, use collider.raycast and send raycast towards collider center, if no collision we are inside collider
-
         /// <summary>
         /// Builds all voxelObjects and voxelSystem for all colliders in the given scene, returns true if succesfull
         /// </summary>
@@ -187,7 +185,6 @@ namespace zombVoxels
                 //Notify voxParent that it has this collider
                 if (usedParent == true)
                 {
-                    //if (voxParent.buildOnStart == true) continue;//Since its computed on start it should count as not included in scene
                     voxParent.voxCols.Add(new() { col = col, colId = colId, colType = voxType });
                 }
 
