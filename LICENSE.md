@@ -17,4 +17,4 @@ Full license text available at: https://creativecommons.org/licenses/by-nc/4.0/
 The following folder is excluded from this license:
 - `plugins/`: Contains third-party libraries and plugins that are included under their respective licenses. See the `plugins/` folder for details.
 
-Each library or plugin in the `plugins/` folder is subject to its own license terms and is not covered by the CC BY-NC 4.0 license applied to the rest of this project.
+Each library or plugin in the `plugins/` folder is subject to its own license terms and is **not** covered by the CC BY-NC 4.0 license applied to the rest of this project.
