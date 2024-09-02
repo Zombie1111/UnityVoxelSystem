@@ -4,9 +4,9 @@
 ## Overview
 A multithreaded voxel system for Unity designed to be an efficient way to access a rough reprisentation of the worlds geometry. The primary purpose of this project is to provide a easy way to run heavy tasks that require knowledge of the worlds geometry on a background thread. Its particularly useful for tasks like pathfinding and finding clear positions where some NPCs can spawn.
 
-![Gif showing adding, creating and moving voxel objects](https://media.giphy.com/media/yaVuPs1yBckdq5tBh3/giphy.gif)
+<img src="https://media.giphy.com/media/yaVuPs1yBckdq5tBh3/giphy.gif" width="100%" height="100%"/>
 
-![Gif showing pathfinding](https://media.giphy.com/media/PvyUHqM5OGjFCEHIWR/giphy.gif)
+<img src="https://media.giphy.com/media/PvyUHqM5OGjFCEHIWR/giphy.gif" width="100%" height="100%"/>
 
 ## Key Features
 <ul>
@@ -55,7 +55,7 @@ All voxelObjects are added to the global voxel grid, it consumes 24 bits per vox
 
 **Execution Order**
 
-![Image of execution order diagram](https://i.postimg.cc/1XMjDCFp/image-2.png)
+<img src="https://i.postimg.cc/1XMjDCFp/image-2.png" width="75%" height="75%"/>
 
 ## License
 The original code and assets created for this project are licensed under CC BY-NC 4.0 - See the `LICENSE` file for more details.
