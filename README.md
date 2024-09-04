@@ -35,8 +35,8 @@ A multithreaded voxel system for Unity designed to be an efficient way to access
   <li>Create a new empty game object and add the VoxGlobalHandler script to it</li>
   <li>Make sure the worldspace bounding box of all colliders that should be voxelized are inside the yellow wireframe box. You can change the WorldScaleAxis parameter on the VoxGlobalHandler script to make the process easier or open the VoxGlobalSettings script and change the voxelSizeWorld and voxelAxisCount values</li>
   <li>Add the VoxParent script to game objects that will be cloned at runtime or if you want more configuration options</li>
-  <li>Build the scene, Tools->Voxel System->Build Active Scene</li>
-  <li>Enter playmode and a voxelized version of all colliders should exist, Tools->Voxel System->Toggle Draw Editor Voxels</li>
+  <li>Build the scene, <code>Tools->Voxel System->Build Active Scene</code></li>
+  <li>Enter playmode and a voxelized version of all colliders should exist, <code>Tools->Voxel System->Toggle Draw Editor Voxels</code></li>
 </ol>
 
 ## Documentation
