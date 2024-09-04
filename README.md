@@ -1,6 +1,15 @@
 
 <h1 align="center">UnityVoxelSystem by David Westberg</h1>
 
+## Table of Contents
+- [Overview](#overview)
+- [Key Features](#key-features)
+- [Instructions](#instructions)
+- [Documentation](#documentation)
+- [Technical Details](#technical-details)
+- [License](#license)
+- [Third-Party Libraries](#third-party-libraries)
+
 ## Overview
 A multithreaded voxel system for Unity designed to be an efficient way to access a rough reprisentation of the worlds geometry. The primary purpose of this project is to provide a easy way to run heavy tasks that require knowledge of the worlds geometry on a background thread. Its particularly useful for tasks like pathfinding and finding clear positions where some NPCs can spawn.
 
@@ -19,7 +28,7 @@ A multithreaded voxel system for Unity designed to be an efficient way to access
 <li>All voxels can be in 255 different states, allowing you to categorize colliders and more</li>
 </ul>
 
-## Installaion
+## Instructions
 **Requirements** (Should work in other versions/render piplines)
 <ul>
 <li>Unity 2023.2.20f1 (Built-in)</li>
